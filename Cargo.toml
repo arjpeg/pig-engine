@@ -3,9 +3,17 @@ name = "pig"
 version = "0.1.0"
 edition = "2021"
 
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
 [dependencies]
 anyhow = "1.0.86"
 bytemuck = { version = "1.16.1", features = ["derive"] }
+glam = "0.28.0"
 pollster = { version = "0.3.0", features = ["macro"] }
+tobj = "4.0.2"
 wgpu = "0.20.1"
 winit = "0.29"

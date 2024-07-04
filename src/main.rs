@@ -4,6 +4,7 @@ use renderer::Renderer;
 use wgpu::SurfaceError;
 use winit::{dpi::LogicalSize, event::Event, event_loop::EventLoop, window::WindowBuilder};
 
+mod camera;
 mod model;
 mod renderer;
 

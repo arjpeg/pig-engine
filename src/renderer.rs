@@ -1,11 +1,16 @@
 use std::ops::Range;
 
+use glam::{vec3, Vec3};
+use util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::{dpi::PhysicalSize, window::Window};
 
 use anyhow::Result;
 
-use crate::model::{Mesh, MeshVertex, Model, Vertex};
+use crate::{
+    camera::Camera,
+    model::{Mesh, MeshVertex, Model, Vertex},
+};
 
 /// A trait to be implemented by a render pass to render any arbitrary object.
 pub trait Render<'a, T> {
@@ -34,6 +39,13 @@ pub struct Renderer<'s> {
 
     /// The model currently being rendered.
     model: crate::model::Model,
+
+    /// The camera from which all model's positions are based.
+    camera: crate::camera::Camera,
+    /// A uniform buffer to hold the camera's view-projection matrix.
+    camera_uniform: wgpu::Buffer,
+    /// The uniform bind group to which the camera's uniform is stored.
+    camera_bind_group: wgpu::BindGroup,
 }
 
 impl<'s> Renderer<'s> {
@@ -70,22 +82,25 @@ impl<'s> Renderer<'s> {
         let surface_config = Self::get_surface_config(&adapter, &surface, window.inner_size());
         surface.configure(&device, &surface_config);
 
-        let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
-        let pipeline = Self::create_pipeline(&device, &surface_config, shader);
-
-        #[rustfmt::skip]
-        let model = Model {
-            mesh: Mesh::new(
-                &[
-                    MeshVertex { pos: [0.0, 0.5, 0.0] },
-                    MeshVertex { pos: [-0.5, -0.5, 0.0] },
-                    MeshVertex { pos: [0.5, -0.5, 0.0] },
-                ],
-                &[0, 1, 2],
+        let (camera, camera_uniform, camera_bind_group_layout, camera_bind_group) =
+            Self::create_camera(
+                Camera::new(
+                    vec3(2.5, -1.0, 0.0),
+                    vec3(-1.0, 0.0, 0.0),
+                    window.inner_size(),
+                ),
                 &device,
-            )
-            .unwrap(),
-        };
+            );
+
+        let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
+        let pipeline = Self::create_pipeline(
+            &device,
+            &surface_config,
+            shader,
+            &[&camera_bind_group_layout],
+        );
+
+        let model = Model::load_from_file("assets/dragon.obj", &device).unwrap();
 
         Ok(Self {
             device,
@@ -94,6 +109,9 @@ impl<'s> Renderer<'s> {
             surface,
             surface_config,
             model,
+            camera,
+            camera_uniform,
+            camera_bind_group,
         })
     }
 
@@ -102,11 +120,12 @@ impl<'s> Renderer<'s> {
         device: &Device,
         surface_config: &SurfaceConfiguration,
         shader: ShaderModule,
+        bind_group_layouts: &[&BindGroupLayout],
     ) -> RenderPipeline {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("Pipeline Layout"),
-            bind_group_layouts: &[],
+            label: Some("Render Pipeline Layout"),
             push_constant_ranges: &[],
+            bind_group_layouts,
         });
 
         device.create_render_pipeline(&RenderPipelineDescriptor {
@@ -147,13 +166,51 @@ impl<'s> Renderer<'s> {
         })
     }
 
+    /// Creates a camera, uniform buffer, and binding group (layout).
+    fn create_camera(
+        camera: Camera,
+        device: &Device,
+    ) -> (Camera, Buffer, BindGroupLayout, BindGroup) {
+        let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Camera Uniform Buffer"),
+            contents: bytemuck::cast_slice(&camera.view_proj().to_cols_array()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("Camera Bind Group Layout"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Camera Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
+        (camera, uniform_buffer, bind_group_layout, bind_group)
+    }
+
     /// Creates a surface configuration given an adapter, surface, and surface size.
     /// Does not apply the created config to the surface
     fn get_surface_config(
         adapter: &Adapter,
         surface: &Surface,
-        PhysicalSize { width, height }: PhysicalSize<u32>,
+        size: PhysicalSize<u32>,
     ) -> SurfaceConfiguration {
+        let PhysicalSize { width, height } = size;
         let surface_caps = surface.get_capabilities(&adapter);
 
         let surface_format = surface_caps
@@ -220,6 +277,8 @@ impl<'s> Renderer<'s> {
             });
 
             render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+
             render_pass.draw_object(&self.model);
         };
 

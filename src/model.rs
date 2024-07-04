@@ -1,6 +1,6 @@
 use std::mem;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use wgpu::{util::*, *};
 
 use crate::renderer::Render;
@@ -29,6 +29,8 @@ pub trait Vertex: bytemuck::Pod + bytemuck::Zeroable {
 pub struct MeshVertex {
     /// The 3d position of the vertex in the (right-hand based) world.
     pub pos: [f32; 3],
+    /// The color of the vertex, with each component in the range [0, 1]
+    pub color: [f32; 3],
 }
 
 /// A model in the world, consisting of its mesh(es) and material(s).
@@ -52,13 +54,39 @@ pub struct Mesh {
     pub count: u32,
 }
 
+impl Model {
+    /// Loads a mesh from the given path, which is interpreted as an object file
+    /// and triangulated to make a mesh.
+    pub fn load_from_file(file_name: &str, device: &Device) -> Result<Self> {
+        let (models, _) = tobj::load_obj(file_name, &tobj::GPU_LOAD_OPTIONS)?;
+
+        let meshes = models
+            .iter()
+            .map(|m| {
+                let vertices = (0..m.mesh.positions.len() / 3)
+                    .map(|i| MeshVertex {
+                        pos: [
+                            m.mesh.positions[i * 3],
+                            m.mesh.positions[i * 3 + 1],
+                            m.mesh.positions[i * 3 + 2],
+                        ],
+                        color: [0.5, 0.2, 0.5],
+                    })
+                    .collect::<Vec<_>>();
+
+                Mesh::new(&vertices, &m.mesh.indices, device)
+            })
+            .collect::<Vec<_>>();
+
+        let mesh = meshes.into_iter().nth(0).unwrap();
+
+        Ok(Self { mesh })
+    }
+}
+
 impl Mesh {
     // Creates a new mesh and uploads the given vertex and index data to the GPU.
-    pub fn new<T: Vertex>(vertices: &[T], indices: &[u32], device: &Device) -> Result<Self> {
-        if indices.len() % 3 != 0 {
-            bail!("index buffer had a number of indices not divisible by three");
-        }
-
+    pub fn new<T: Vertex>(vertices: &[T], indices: &[u32], device: &Device) -> Self {
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(vertices),
@@ -73,17 +101,18 @@ impl Mesh {
 
         let count = indices.len() as u32;
 
-        Ok(Self {
+        Self {
             vertex_buffer,
             index_buffer,
             count,
-        })
+        }
     }
 }
 
 impl Vertex for MeshVertex {
     const ATTRIBS: &'static [VertexAttribute] = &vertex_attr_array![
-        0 => Float32x3
+        0 => Float32x3,
+        1 => Float32x3,
     ];
 }
 
