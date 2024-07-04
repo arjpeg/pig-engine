@@ -54,13 +54,30 @@ impl<'s> Renderer<'s> {
 
         let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
 
+        let pipeline = Self::create_pipeline(&device, &surface_config, shader);
+
+        Ok(Self {
+            device,
+            queue,
+            pipeline,
+            surface,
+            surface_config,
+        })
+    }
+
+    /// Creates the rendering pipeline.
+    fn create_pipeline(
+        device: &Device,
+        surface_config: &SurfaceConfiguration,
+        shader: ShaderModule,
+    ) -> RenderPipeline {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
 
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+        device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: VertexState {
@@ -95,18 +112,11 @@ impl<'s> Renderer<'s> {
                 alpha_to_coverage_enabled: false,
             },
             multiview: None,
-        });
-
-        Ok(Self {
-            device,
-            queue,
-            pipeline,
-            surface,
-            surface_config,
         })
     }
 
-    /// Gets the surface configuration given an adapter, surface, and surface size
+    /// Creates a surface configuration given an adapter, surface, and surface size.
+    /// Does not apply the created config to the surface
     fn get_surface_config(
         adapter: &Adapter,
         surface: &Surface,
