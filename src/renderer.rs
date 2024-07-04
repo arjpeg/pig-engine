@@ -1,7 +1,22 @@
+use std::ops::Range;
+
 use wgpu::*;
 use winit::{dpi::PhysicalSize, window::Window};
 
 use anyhow::Result;
+
+use crate::model::{Mesh, MeshVertex, Model, Vertex};
+
+/// A trait to be implemented by a render pass to render any arbitrary object.
+pub trait Render<'a, T> {
+    /// Render a single instance of this value.
+    fn draw_object(&mut self, value: &'a T) {
+        self.draw_object_instanced(value, 0..1);
+    }
+
+    /// Renders the object in the range of instances.
+    fn draw_object_instanced(&mut self, value: &'a T, instances: Range<u32>);
+}
 
 #[derive(Debug)]
 pub struct Renderer<'s> {
@@ -16,6 +31,9 @@ pub struct Renderer<'s> {
     surface: wgpu::Surface<'s>,
     /// The configuration of the `surface`.
     surface_config: wgpu::SurfaceConfiguration,
+
+    /// The model currently being rendered.
+    model: crate::model::Model,
 }
 
 impl<'s> Renderer<'s> {
@@ -53,8 +71,21 @@ impl<'s> Renderer<'s> {
         surface.configure(&device, &surface_config);
 
         let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
-
         let pipeline = Self::create_pipeline(&device, &surface_config, shader);
+
+        #[rustfmt::skip]
+        let model = Model {
+            mesh: Mesh::new(
+                &[
+                    MeshVertex { pos: [0.0, 0.5, 0.0] },
+                    MeshVertex { pos: [-0.5, -0.5, 0.0] },
+                    MeshVertex { pos: [0.5, -0.5, 0.0] },
+                ],
+                &[0, 1, 2],
+                &device,
+            )
+            .unwrap(),
+        };
 
         Ok(Self {
             device,
@@ -62,6 +93,7 @@ impl<'s> Renderer<'s> {
             pipeline,
             surface,
             surface_config,
+            model,
         })
     }
 
@@ -83,7 +115,7 @@ impl<'s> Renderer<'s> {
             vertex: VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[],
+                buffers: &[MeshVertex::desc()],
                 compilation_options: PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
@@ -188,7 +220,7 @@ impl<'s> Renderer<'s> {
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.draw_object(&self.model);
         };
 
         self.queue.submit(std::iter::once(encoder.finish()));
