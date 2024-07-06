@@ -17,4 +17,3 @@ pollster = { version = "0.3.0", features = ["macro"] }
 tobj = "4.0.2"
 wgpu = "0.20.1"
 winit = "0.29"
-winit_input_helper = "0.16.0"

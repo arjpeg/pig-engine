@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use glam::{vec3, Vec3};
+use glam::Mat4;
 use util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
 use winit::{dpi::PhysicalSize, window::Window};
@@ -9,7 +9,7 @@ use anyhow::Result;
 
 use crate::{
     camera::Camera,
-    model::{Mesh, MeshVertex, Model, Vertex},
+    model::{MeshVertex, Model, Vertex},
 };
 
 /// A trait to be implemented by a render pass to render any arbitrary object.
@@ -40,8 +40,6 @@ pub struct Renderer<'s> {
     /// The model currently being rendered.
     model: crate::model::Model,
 
-    /// The camera from which all model's positions are based.
-    camera: crate::camera::Camera,
     /// A uniform buffer to hold the camera's view-projection matrix.
     camera_uniform: wgpu::Buffer,
     /// The uniform bind group to which the camera's uniform is stored.
@@ -50,7 +48,7 @@ pub struct Renderer<'s> {
 
 impl<'s> Renderer<'s> {
     /// Creates a new renderer given a window as the surface.
-    pub async fn new(window: &'s Window) -> Result<Self> {
+    pub async fn new(window: &'s Window, camera: &Camera) -> Result<Self> {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             flags: InstanceFlags::empty(),
@@ -82,15 +80,8 @@ impl<'s> Renderer<'s> {
         let surface_config = Self::get_surface_config(&adapter, &surface, window.inner_size());
         surface.configure(&device, &surface_config);
 
-        let (camera, camera_uniform, camera_bind_group_layout, camera_bind_group) =
-            Self::create_camera(
-                Camera::new(
-                    vec3(2.5, -1.0, 0.0),
-                    vec3(-1.0, 0.0, 0.0),
-                    window.inner_size(),
-                ),
-                &device,
-            );
+        let (camera_uniform, camera_bind_group_layout, camera_bind_group) =
+            Self::create_camera_buffers(camera, &device);
 
         let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
         let pipeline = Self::create_pipeline(
@@ -109,7 +100,6 @@ impl<'s> Renderer<'s> {
             surface,
             surface_config,
             model,
-            camera,
             camera_uniform,
             camera_bind_group,
         })
@@ -167,10 +157,10 @@ impl<'s> Renderer<'s> {
     }
 
     /// Creates a camera, uniform buffer, and binding group (layout).
-    fn create_camera(
-        camera: Camera,
+    fn create_camera_buffers(
+        camera: &Camera,
         device: &Device,
-    ) -> (Camera, Buffer, BindGroupLayout, BindGroup) {
+    ) -> (Buffer, BindGroupLayout, BindGroup) {
         let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Camera Uniform Buffer"),
             contents: bytemuck::cast_slice(&camera.view_proj().to_cols_array()),
@@ -200,7 +190,7 @@ impl<'s> Renderer<'s> {
             }],
         });
 
-        (camera, uniform_buffer, bind_group_layout, bind_group)
+        (uniform_buffer, bind_group_layout, bind_group)
     }
 
     /// Creates a surface configuration given an adapter, surface, and surface size.
@@ -211,7 +201,7 @@ impl<'s> Renderer<'s> {
         size: PhysicalSize<u32>,
     ) -> SurfaceConfiguration {
         let PhysicalSize { width, height } = size;
-        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_caps = surface.get_capabilities(adapter);
 
         let surface_format = surface_caps
             .formats
@@ -241,6 +231,15 @@ impl<'s> Renderer<'s> {
         self.surface_config.height = height;
 
         self.surface.configure(&self.device, &self.surface_config);
+    }
+
+    /// Updates the camera's uniform buffer with the given view projection matrix.
+    pub fn update_camera_buffer(&mut self, view_proj: Mat4) {
+        self.queue.write_buffer(
+            &self.camera_uniform,
+            0,
+            bytemuck::cast_slice(&view_proj.to_cols_array()),
+        );
     }
 
     /// Renders the currently bound vertex buffer onto the `surface`.

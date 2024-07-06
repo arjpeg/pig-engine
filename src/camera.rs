@@ -1,6 +1,9 @@
 use glam::*;
 use winit::dpi::PhysicalSize;
 
+/// The speed of the camera in space.
+pub const CAMERA_SPEED: f32 = 2.0;
+
 /// A perspective camera with a position and orientation in 3D space.
 #[derive(Debug)]
 pub struct Camera {
@@ -38,7 +41,7 @@ impl Camera {
     /// Follows the canonical WebGPU coordinate depth in range [0, 1], unlike OpenGL's [-1, 1]
     /// range.
     pub fn view_proj(&self) -> Mat4 {
-        let view = Mat4::look_at_rh(self.eye, self.forward, self.up);
+        let view = Mat4::look_at_rh(self.eye, self.forward + self.eye, self.up);
         let proj = Mat4::perspective_infinite_rh(self.fovy, self.aspect, self.znear);
 
         proj * view

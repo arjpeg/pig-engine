@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 
-use renderer::Renderer;
-use wgpu::SurfaceError;
-use winit::{dpi::LogicalSize, event::Event, event_loop::EventLoop, window::WindowBuilder};
-use winit_input_helper::WinitInputHelper;
+use app::App;
+use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
 
+mod app;
 mod camera;
 mod model;
 mod renderer;
@@ -17,31 +16,9 @@ async fn main() -> anyhow::Result<()> {
         .with_inner_size(LogicalSize::new(1920, 1080))
         .build(&event_loop)?;
 
-    let mut input = WinitInputHelper::new();
+    let mut app = App::new(&window).await?;
 
-    let mut renderer = Renderer::new(&window).await?;
-
-    event_loop.run(|event, elwt| {
-        if !input.update(&event) {
-            return;
-        };
-
-        println!("{:?}", input.mouse_diff());
-
-        if let Some(size) = input.window_resized() {
-            renderer.resize(size);
-        }
-
-        match renderer.render() {
-            Ok(_) => {}
-            // Reconfigure the surface if it's lost
-            Err(SurfaceError::Lost) => renderer.resize(window.inner_size()),
-            // If we are out of memory, just quit the app
-            Err(SurfaceError::OutOfMemory) => elwt.exit(),
-            // For other errors, they will be gone by the next frame
-            Err(error) => eprintln!("{error}"),
-        };
-    })?;
+    event_loop.run(|event, elwt| app.update(event, elwt, &window).unwrap())?;
 
     Ok(())
 }
