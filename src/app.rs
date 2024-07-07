@@ -1,18 +1,15 @@
 use std::collections::HashSet;
 
-use glam::{vec3, Vec3};
+use glam::vec3;
 use wgpu::SurfaceError;
 use winit::{
-    event::{ElementState, Event, KeyEvent, WindowEvent},
+    event::{DeviceEvent, ElementState, Event, KeyEvent, WindowEvent},
     event_loop::EventLoopWindowTarget,
     keyboard::{KeyCode, PhysicalKey},
-    window::Window,
+    window::{CursorGrabMode, Window},
 };
 
-use crate::{
-    camera::{Camera, CAMERA_SPEED},
-    renderer::Renderer,
-};
+use crate::{camera::Camera, renderer::Renderer};
 
 use anyhow::Result;
 
@@ -37,7 +34,12 @@ pub struct App<'a> {
 impl<'a> App<'a> {
     /// Sets up the renderer and camera.
     pub async fn new(window: &'a Window) -> Result<Self> {
-        let camera = Camera::new(vec3(2.5, 0.5, 0.0), Vec3::NEG_X, window.inner_size());
+        let camera = Camera::new(
+            vec3(2.5, 0.0, 0.0),
+            180.0f32.to_radians(),
+            0.0,
+            window.inner_size(),
+        );
 
         let renderer = Renderer::new(window, &camera).await?;
 
@@ -68,6 +70,21 @@ impl<'a> App<'a> {
                 WindowEvent::KeyboardInput {
                     event:
                         KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => {
+                    self.toggle_focus(window);
+                }
+
+                WindowEvent::MouseInput { .. } if !self.has_focus => {
+                    self.toggle_focus(window);
+                }
+
+                WindowEvent::KeyboardInput {
+                    event:
+                        KeyEvent {
                             physical_key: key,
                             state,
                             ..
@@ -88,15 +105,23 @@ impl<'a> App<'a> {
                 WindowEvent::CloseRequested => elwt.exit(),
 
                 WindowEvent::RedrawRequested => {
-                    let _ = 2;
+                    self.camera.update_position(&self.keys_held, 0.01);
 
-                    self.update_camera_position(0.01);
+                    //println!("{:?}", self.camera.forward);
 
+                    self.renderer.update_camera_buffer(self.camera.view_proj());
                     self.render();
                 }
 
                 _ => {}
             },
+
+            Event::DeviceEvent {
+                event: DeviceEvent::MouseMotion { delta },
+                ..
+            } if self.has_focus => {
+                self.camera.update_orientation(delta, 0.01);
+            }
 
             _ => {}
         }
@@ -104,30 +129,17 @@ impl<'a> App<'a> {
         Ok(())
     }
 
-    /// Updates the camera's position based on the latest keyboard inputs.
-    fn update_camera_position(&mut self, dt: f32) {
-        let forward = self.camera.forward;
-        let right = forward.cross(self.camera.up);
+    /// Toggles the current focus state of the app.
+    fn toggle_focus(&mut self, window: &Window) {
+        self.has_focus = !self.has_focus;
 
-        let mut delta_pos = Vec3::ZERO;
-
-        if self.keys_held.contains(&KeyCode::KeyW) {
-            delta_pos += forward;
+        if self.has_focus {
+            window.set_cursor_visible(false);
+            window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+        } else {
+            window.set_cursor_visible(true);
+            window.set_cursor_grab(CursorGrabMode::None).unwrap();
         }
-        if self.keys_held.contains(&KeyCode::KeyS) {
-            delta_pos -= forward;
-        }
-        if self.keys_held.contains(&KeyCode::KeyD) {
-            delta_pos += right;
-        }
-        if self.keys_held.contains(&KeyCode::KeyA) {
-            delta_pos -= right;
-        }
-
-        delta_pos = delta_pos.normalize_or_zero();
-
-        self.camera.eye += dt * CAMERA_SPEED * delta_pos;
-        self.renderer.update_camera_buffer(self.camera.view_proj());
     }
 
     /// Renders everything onto the surface.

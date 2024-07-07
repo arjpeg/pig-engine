@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use app::App;
 use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
 
