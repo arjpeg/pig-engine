@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Instant};
 
 use glam::vec3;
 use wgpu::SurfaceError;
@@ -29,6 +29,9 @@ pub struct App<'a> {
 
     /// All the keys currently being held down.
     keys_held: HashSet<KeyCode>,
+
+    /// The time of the last rendering frame.
+    last_frame: std::time::Instant,
 }
 
 impl<'a> App<'a> {
@@ -48,7 +51,13 @@ impl<'a> App<'a> {
             camera,
             has_focus: false,
             keys_held: HashSet::new(),
+            last_frame: Instant::now(),
         })
+    }
+
+    /// Returns the time elapsed since the last frame, in seconds
+    fn delta_time(&self) -> f32 {
+        (Instant::now() - self.last_frame).as_secs_f32()
     }
 
     /// Updates the app with the latest input state, and renders
@@ -71,6 +80,7 @@ impl<'a> App<'a> {
                     event:
                         KeyEvent {
                             physical_key: PhysicalKey::Code(KeyCode::Escape),
+                            state: ElementState::Pressed,
                             ..
                         },
                     ..
@@ -105,9 +115,12 @@ impl<'a> App<'a> {
                 WindowEvent::CloseRequested => elwt.exit(),
 
                 WindowEvent::RedrawRequested => {
-                    self.camera.update_position(&self.keys_held, 0.01);
+                    if self.has_focus {
+                        self.camera
+                            .update_position(&self.keys_held, self.delta_time());
+                    }
 
-                    //println!("{:?}", self.camera.forward);
+                    self.last_frame = Instant::now();
 
                     self.renderer.update_camera_buffer(self.camera.view_proj());
                     self.render();
@@ -120,7 +133,7 @@ impl<'a> App<'a> {
                 event: DeviceEvent::MouseMotion { delta },
                 ..
             } if self.has_focus => {
-                self.camera.update_orientation(delta, 0.01);
+                self.camera.update_orientation(delta, self.delta_time());
             }
 
             _ => {}

@@ -29,8 +29,8 @@ pub trait Vertex: bytemuck::Pod + bytemuck::Zeroable {
 pub struct MeshVertex {
     /// The 3d position of the vertex in the (right-hand based) world.
     pub pos: [f32; 3],
-    /// The color of the vertex, with each component in the range [0, 1]
-    pub color: [f32; 3],
+    /// The normal vector of the vertex.
+    pub normal: [f32; 3],
 }
 
 /// A model in the world, consisting of its mesh(es) and material(s).
@@ -70,7 +70,11 @@ impl Model {
                             m.mesh.positions[i * 3 + 1],
                             m.mesh.positions[i * 3 + 2],
                         ],
-                        color: [0.5, 0.2, 0.5],
+                        normal: [
+                            m.mesh.normals[i * 3],
+                            m.mesh.normals[i * 3 + 1],
+                            m.mesh.normals[i * 3 + 2],
+                        ],
                     })
                     .collect::<Vec<_>>();
 

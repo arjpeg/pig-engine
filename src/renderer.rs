@@ -70,7 +70,7 @@ impl<'s> Renderer<'s> {
             .request_device(
                 &DeviceDescriptor {
                     label: Some("Request Device"),
-                    required_features: Features::empty(),
+                    required_features: Features::POLYGON_MODE_LINE,
                     required_limits: Limits::default(),
                 },
                 None,

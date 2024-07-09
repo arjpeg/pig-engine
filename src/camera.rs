@@ -3,8 +3,15 @@ use std::{collections::HashSet, f32::consts::FRAC_PI_2};
 use glam::*;
 use winit::{dpi::PhysicalSize, keyboard::KeyCode};
 
-/// The speed of the camera in space.
-pub const CAMERA_SPEED: f32 = 2.0;
+/// The normal speed of the camera in space.
+pub const CAMERA_NORMAL_SPEED: f32 = 1.0;
+/// The speed of the camera when the boost speed key (L_CTRL) is pressed.
+pub const CAMERA_BOOST_SPEED: f32 = 2.0;
+/// The speed of the camera when the slow modifier key (L_ALT) is pressed.
+pub const CAMERA_SLOW_SPEED: f32 = 0.35;
+
+/// The sensitivity of the camera.
+pub const CAMERA_SENSITIVITY: f32 = 0.15;
 
 /// A perspective camera with a position and orientation in 3D space.
 #[derive(Debug)]
@@ -51,7 +58,7 @@ impl Camera {
             up: Vec3::Y,
             aspect: width as f32 / height as f32,
             fovy: 45.0f32.to_radians(),
-            znear: 0.1,
+            znear: 0.01,
             yaw,
             pitch,
         }
@@ -71,8 +78,8 @@ impl Camera {
     pub fn update_orientation(&mut self, delta: (f64, f64), dt: f32) {
         let (dx, dy) = delta;
 
-        self.yaw += dt * dx as f32;
-        self.pitch -= dt * dy as f32;
+        self.yaw += dt * dx as f32 * CAMERA_SENSITIVITY;
+        self.pitch -= dt * dy as f32 * CAMERA_SENSITIVITY;
 
         self.pitch = self.pitch.clamp(-FRAC_PI_2, FRAC_PI_2);
         self.forward = Self::calculate_forward(self.yaw, self.pitch);
@@ -98,8 +105,25 @@ impl Camera {
             delta_pos -= right;
         }
 
+        delta_pos.y = 0.0;
+
+        if keys_held.contains(&KeyCode::Space) {
+            delta_pos += Vec3::Y;
+        }
+        if keys_held.contains(&KeyCode::ShiftLeft) {
+            delta_pos -= Vec3::Y;
+        }
+
         delta_pos = delta_pos.normalize_or_zero();
 
-        self.eye += dt * CAMERA_SPEED * delta_pos;
+        let speed = if keys_held.contains(&KeyCode::ControlLeft) {
+            CAMERA_BOOST_SPEED
+        } else if keys_held.contains(&KeyCode::AltLeft) {
+            CAMERA_SLOW_SPEED
+        } else {
+            CAMERA_NORMAL_SPEED
+        };
+
+        self.eye += dt * speed * delta_pos;
     }
 }
