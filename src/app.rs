@@ -152,6 +152,8 @@ impl<'a> App<'a> {
         } else {
             window.set_cursor_visible(true);
             window.set_cursor_grab(CursorGrabMode::None).unwrap();
+
+            self.keys_held.clear();
         }
     }
 
