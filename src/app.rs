@@ -74,7 +74,10 @@ impl<'a> App<'a> {
             }
 
             Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(size) => self.renderer.resize(size),
+                WindowEvent::Resized(size) => {
+                    self.renderer.resize(size);
+                    self.camera.resize(size);
+                }
 
                 WindowEvent::KeyboardInput {
                     event:

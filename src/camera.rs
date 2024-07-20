@@ -46,7 +46,8 @@ impl Camera {
         )
     }
 
-    /// Creates a new camera at the given position, target, and window size.
+    /// Creates a new camera at the given position, looking at the target, and window size to
+    /// calculate the aspect ratio.
     pub fn new(eye: Vec3, yaw: f32, pitch: f32, window_size: PhysicalSize<u32>) -> Self {
         let PhysicalSize { width, height } = window_size;
 
@@ -125,5 +126,12 @@ impl Camera {
         };
 
         self.eye += dt * speed * delta_pos;
+    }
+
+    /// Recalculates the aspect ratio given the new window size
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        let PhysicalSize { width, height } = size;
+
+        self.aspect = width as f32 / height as f32;
     }
 }

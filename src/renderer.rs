@@ -223,7 +223,9 @@ impl<'s> Renderer<'s> {
     }
 
     /// Resizes the renderer's `config` to match the new given size.
-    pub fn resize(&mut self, PhysicalSize { width, height }: PhysicalSize<u32>) {
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        let PhysicalSize { width, height } = size;
+
         assert!(width > 0, "cannot resize to zero width");
         assert!(height > 0, "cannot resize to zero height");
 

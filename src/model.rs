@@ -55,6 +55,11 @@ pub struct Mesh {
 }
 
 impl Model {
+    /// Creates a new model with the given mesh.
+    pub fn new(mesh: Mesh) -> Self {
+        Self { mesh }
+    }
+
     /// Loads a mesh from the given path, which is interpreted as an object file
     /// and triangulated to make a mesh.
     pub fn load_from_file(file_name: &str, device: &Device) -> Result<Self> {
@@ -62,24 +67,7 @@ impl Model {
 
         let meshes = models
             .iter()
-            .map(|m| {
-                let vertices = (0..m.mesh.positions.len() / 3)
-                    .map(|i| MeshVertex {
-                        pos: [
-                            m.mesh.positions[i * 3],
-                            m.mesh.positions[i * 3 + 1],
-                            m.mesh.positions[i * 3 + 2],
-                        ],
-                        normal: [
-                            m.mesh.normals[i * 3],
-                            m.mesh.normals[i * 3 + 1],
-                            m.mesh.normals[i * 3 + 2],
-                        ],
-                    })
-                    .collect::<Vec<_>>();
-
-                Mesh::new(&vertices, &m.mesh.indices, device)
-            })
+            .map(|m| Mesh::from_tobj_mesh(&m.mesh, device))
             .collect::<Vec<_>>();
 
         let mesh = meshes.into_iter().nth(0).unwrap();
@@ -89,6 +77,26 @@ impl Model {
 }
 
 impl Mesh {
+    /// Loads and uploads the mesh data from a tobj Mesh value.
+    fn from_tobj_mesh(mesh: &tobj::Mesh, device: &Device) -> Self {
+        let vertices = (0..mesh.positions.len() / 3)
+            .map(|i| MeshVertex {
+                pos: [
+                    mesh.positions[i * 3],
+                    mesh.positions[i * 3 + 1],
+                    mesh.positions[i * 3 + 2],
+                ],
+                normal: [
+                    mesh.normals[i * 3],
+                    mesh.normals[i * 3 + 1],
+                    mesh.normals[i * 3 + 2],
+                ],
+            })
+            .collect::<Vec<_>>();
+
+        Self::new(&vertices, &mesh.indices, device)
+    }
+
     // Creates a new mesh and uploads the given vertex and index data to the GPU.
     pub fn new<T: Vertex>(vertices: &[T], indices: &[u32], device: &Device) -> Self {
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
