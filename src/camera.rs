@@ -4,11 +4,11 @@ use glam::*;
 use winit::{dpi::PhysicalSize, keyboard::KeyCode};
 
 /// The normal speed of the camera in space.
-pub const CAMERA_NORMAL_SPEED: f32 = 1.0;
+pub const CAMERA_NORMAL_SPEED: f32 = 2.0;
 /// The speed of the camera when the boost speed key (L_CTRL) is pressed.
-pub const CAMERA_BOOST_SPEED: f32 = 2.0;
+pub const CAMERA_BOOST_SPEED: f32 = 5.0;
 /// The speed of the camera when the slow modifier key (L_ALT) is pressed.
-pub const CAMERA_SLOW_SPEED: f32 = 0.35;
+pub const CAMERA_SLOW_SPEED: f32 = 1.25;
 
 /// The sensitivity of the camera.
 pub const CAMERA_SENSITIVITY: f32 = 0.15;

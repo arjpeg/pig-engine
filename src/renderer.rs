@@ -91,7 +91,7 @@ impl<'s> Renderer<'s> {
             &[&camera_bind_group_layout],
         );
 
-        let model = Model::load_from_file("assets/dragon.obj", &device).unwrap();
+        let model = Model::load_from_file("assets/cube.obj", &device).unwrap();
 
         Ok(Self {
             device,
@@ -141,7 +141,7 @@ impl<'s> Renderer<'s> {
                 topology: PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: FrontFace::Ccw,
-                cull_mode: None,
+                cull_mode: Some(Face::Back),
                 polygon_mode: PolygonMode::Fill,
                 conservative: false,
                 unclipped_depth: false,
