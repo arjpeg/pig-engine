@@ -9,7 +9,8 @@ use anyhow::Result;
 
 use crate::{
     camera::Camera,
-    model::{MeshVertex, Model, Vertex},
+    chunk::Chunk,
+    model::{ChunkMeshBuilder, Mesh, MeshVertex, Model, Vertex},
 };
 
 /// A trait to be implemented by a render pass to render any arbitrary object.
@@ -48,7 +49,7 @@ pub struct Renderer<'s> {
 
 impl<'s> Renderer<'s> {
     /// Creates a new renderer given a window as the surface.
-    pub async fn new(window: &'s Window, camera: &Camera) -> Result<Self> {
+    pub async fn new(window: &'s Window, camera: &Camera, chunk: &Chunk) -> Result<Self> {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             flags: InstanceFlags::empty(),
@@ -91,7 +92,14 @@ impl<'s> Renderer<'s> {
             &[&camera_bind_group_layout],
         );
 
-        let model = Model::load_from_file("assets/cube.obj", &device).unwrap();
+        let (vertices, indices) = ChunkMeshBuilder::new(chunk).build();
+
+        println!("num vertices: {}", vertices.len());
+        println!("num indices: {}", indices.len());
+
+        // println!("vertices: {:?}", vertices);
+
+        let model = Model::new(Mesh::new(&vertices, &indices, &device));
 
         Ok(Self {
             device,

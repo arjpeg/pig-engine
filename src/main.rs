@@ -5,6 +5,7 @@ use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
 
 mod app;
 mod camera;
+mod chunk;
 mod model;
 mod renderer;
 

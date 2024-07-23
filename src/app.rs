@@ -1,6 +1,6 @@
 use std::{collections::HashSet, time::Instant};
 
-use glam::vec3;
+use glam::*;
 use wgpu::SurfaceError;
 use winit::{
     event::{DeviceEvent, ElementState, Event, KeyEvent, WindowEvent},
@@ -9,7 +9,7 @@ use winit::{
     window::{CursorGrabMode, Window},
 };
 
-use crate::{camera::Camera, renderer::Renderer};
+use crate::{camera::Camera, chunk::*, renderer::Renderer};
 
 use anyhow::Result;
 
@@ -20,9 +20,11 @@ pub struct App<'a> {
     /// The renderer responsible for interacting with wgpu and setting up the
     /// rendering device, and drawing out a scene.
     renderer: crate::renderer::Renderer<'a>,
-
     /// The camera in 3d space representing the player.
     camera: crate::camera::Camera,
+
+    /// The only chunk in the world for now.
+    chunk: crate::chunk::Chunk,
 
     /// Represents whether the app is currently in focus and locked or not.
     has_focus: bool,
@@ -38,17 +40,21 @@ impl<'a> App<'a> {
     /// Sets up the renderer and camera.
     pub async fn new(window: &'a Window) -> Result<Self> {
         let camera = Camera::new(
-            vec3(2.5, 0.0, 0.0),
-            180.0f32.to_radians(),
+            vec3(10.0, 10.0, 7.0),
             0.0,
+            -20.0f32.to_radians(),
             window.inner_size(),
         );
 
-        let renderer = Renderer::new(window, &camera).await?;
+        let populator = FlatFillPopulator::new(4, Voxel::Grass)?;
+        let chunk = Chunk::new(ivec2(0, 0), &populator);
+
+        let renderer = Renderer::new(window, &camera, &chunk).await?;
 
         Ok(Self {
             renderer,
             camera,
+            chunk,
             has_focus: false,
             keys_held: HashSet::new(),
             last_frame: Instant::now(),
