@@ -1,6 +1,10 @@
-use std::{collections::HashSet, time::Instant};
+use std::{
+    collections::HashSet,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 
 use glam::*;
+use noise::Simplex;
 use wgpu::SurfaceError;
 use winit::{
     event::{DeviceEvent, ElementState, Event, KeyEvent, WindowEvent},
@@ -34,6 +38,9 @@ pub struct App<'a> {
 
     /// The time of the last rendering frame.
     last_frame: std::time::Instant,
+
+    /// The noise generator used to generate terrain, etc.
+    noise: Simplex,
 }
 
 impl<'a> App<'a> {
@@ -46,7 +53,13 @@ impl<'a> App<'a> {
             window.inner_size(),
         );
 
-        let populator = FlatFillPopulator::new(4, Voxel::Grass)?;
+        let seed = SystemTime::now().duration_since(UNIX_EPOCH)?;
+        let noise = Simplex::new(seed.as_secs() as u32);
+
+        let populator = SinglesPopulator::new(vec![
+            (uvec3(8, 8, 8), Voxel::Grass),
+            (uvec3(4, 8, 8), Voxel::Grass),
+        ])?;
         let chunk = Chunk::new(ivec2(0, 0), &populator);
 
         let renderer = Renderer::new(window, &camera, &chunk).await?;
@@ -55,6 +68,7 @@ impl<'a> App<'a> {
             renderer,
             camera,
             chunk,
+            noise,
             has_focus: false,
             keys_held: HashSet::new(),
             last_frame: Instant::now(),

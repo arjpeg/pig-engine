@@ -1,5 +1,6 @@
 use anyhow::bail;
 use glam::*;
+use noise::{NoiseFn, Simplex};
 
 /// The width of a chunk (xz length).
 pub const CHUNK_WIDTH: usize = 16;
@@ -128,6 +129,36 @@ impl Populator for FlatFillPopulator {
             for z in 0..CHUNK_WIDTH {
                 for x in 0..CHUNK_WIDTH {
                     voxels[y][z][x] = self.1;
+                }
+            }
+        }
+    }
+}
+
+/// A chunk populator where the voxel data is sampled using 3d simplex noise.
+pub struct SimplexPopulator<'a>(&'a Simplex);
+
+impl<'a> SimplexPopulator<'a> {
+    /// Creates a new populator given the noise sampler.
+    pub fn new(sampler: &'a Simplex) -> Self {
+        Self(sampler)
+    }
+}
+
+impl Populator for SimplexPopulator<'_> {
+    fn populate(&self, voxels: &mut VoxelGrid, chunk_position: Vec2) {
+        for y in 0..CHUNK_HEIGHT {
+            for z in 0..CHUNK_WIDTH {
+                for x in 0..CHUNK_WIDTH {
+                    let position = [
+                        x as f64 + chunk_position.x as f64,
+                        y as f64,
+                        z as f64 + chunk_position.y as f64,
+                    ];
+
+                    if self.0.get(position) > 0.5 {
+                        voxels[y][z][x] = Voxel::Grass;
+                    }
                 }
             }
         }
