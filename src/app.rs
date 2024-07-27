@@ -53,7 +53,7 @@ impl<'a> App<'a> {
             window.inner_size(),
         );
 
-        let image_bytes = include_bytes!("../assets/image.png");
+        let image_bytes = include_bytes!("../assets/grass_side.png");
 
         let seed = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let noise = Simplex::new(seed.as_secs() as u32);
