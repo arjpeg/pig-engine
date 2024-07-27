@@ -225,6 +225,8 @@ impl<'s> Renderer<'s> {
         self.surface_config.width = width;
         self.surface_config.height = height;
 
+        self.depth_texture = Texture::create_depth_texture(&self.device, &self.surface_config);
+
         self.surface.configure(&self.device, &self.surface_config);
     }
 
