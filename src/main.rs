@@ -8,6 +8,7 @@ mod camera;
 mod chunk;
 mod model;
 mod renderer;
+mod texture;
 
 #[pollster::main]
 async fn main() -> anyhow::Result<()> {

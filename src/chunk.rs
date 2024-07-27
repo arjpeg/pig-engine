@@ -125,10 +125,10 @@ impl FlatFillPopulator {
 
 impl Populator for FlatFillPopulator {
     fn populate(&self, voxels: &mut VoxelGrid, _: Vec2) {
-        for y in 0..self.0 {
-            for z in 0..CHUNK_WIDTH {
-                for x in 0..CHUNK_WIDTH {
-                    voxels[y][z][x] = self.1;
+        for y in voxels.iter_mut().take(self.0) {
+            for z in y.iter_mut() {
+                for voxel in z.iter_mut() {
+                    *voxel = self.1;
                 }
             }
         }

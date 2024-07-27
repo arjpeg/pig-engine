@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use glam::Mat4;
-use util::{BufferInitDescriptor, DeviceExt};
+
 use wgpu::*;
 use winit::{dpi::PhysicalSize, window::Window};
 
@@ -11,6 +11,7 @@ use crate::{
     camera::Camera,
     chunk::Chunk,
     model::{ChunkMeshBuilder, Mesh, MeshVertex, Model, Vertex},
+    texture::Texture,
 };
 
 /// A trait to be implemented by a render pass to render any arbitrary object.
@@ -45,11 +46,19 @@ pub struct Renderer<'s> {
     camera_uniform: wgpu::Buffer,
     /// The uniform bind group to which the camera's uniform is stored.
     camera_bind_group: wgpu::BindGroup,
+
+    /// The bind group to hold the texture being rendered.
+    texture_bind_group: wgpu::BindGroup,
 }
 
 impl<'s> Renderer<'s> {
     /// Creates a new renderer given a window as the surface.
-    pub async fn new(window: &'s Window, camera: &Camera, chunk: &Chunk) -> Result<Self> {
+    pub async fn new(
+        window: &'s Window,
+        camera: &Camera,
+        chunk: &Chunk,
+        texture_bytes: &[u8],
+    ) -> Result<Self> {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             flags: InstanceFlags::empty(),
@@ -82,22 +91,23 @@ impl<'s> Renderer<'s> {
         surface.configure(&device, &surface_config);
 
         let (camera_uniform, camera_bind_group_layout, camera_bind_group) =
-            Self::create_camera_buffers(camera, &device);
+            camera.create_buffers(&device);
+
+        let texture = Texture::from_bytes(&device, &queue, texture_bytes, Some("Texture"))?;
+        let (texture_bind_group_layout, texture_bind_group) = texture.create_bind_group(&device);
 
         let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
         let pipeline = Self::create_pipeline(
             &device,
             &surface_config,
             shader,
-            &[&camera_bind_group_layout],
+            &[&camera_bind_group_layout, &texture_bind_group_layout],
         );
 
         let (vertices, indices) = ChunkMeshBuilder::new(chunk).build();
 
         println!("num vertices: {}", vertices.len());
         println!("num indices: {}", indices.len());
-
-        // println!("vertices: {:?}", vertices);
 
         let model = Model::new(Mesh::new(&vertices, &indices, &device));
 
@@ -110,6 +120,7 @@ impl<'s> Renderer<'s> {
             model,
             camera_uniform,
             camera_bind_group,
+            texture_bind_group,
         })
     }
 
@@ -162,43 +173,6 @@ impl<'s> Renderer<'s> {
             },
             multiview: None,
         })
-    }
-
-    /// Creates a camera, uniform buffer, and binding group (layout).
-    fn create_camera_buffers(
-        camera: &Camera,
-        device: &Device,
-    ) -> (Buffer, BindGroupLayout, BindGroup) {
-        let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Camera Uniform Buffer"),
-            contents: bytemuck::cast_slice(&camera.view_proj().to_cols_array()),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("Camera Bind Group Layout"),
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("Camera Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
-        });
-
-        (uniform_buffer, bind_group_layout, bind_group)
     }
 
     /// Creates a surface configuration given an adapter, surface, and surface size.
@@ -286,7 +260,9 @@ impl<'s> Renderer<'s> {
             });
 
             render_pass.set_pipeline(&self.pipeline);
+
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.texture_bind_group, &[]);
 
             render_pass.draw_object(&self.model);
         };

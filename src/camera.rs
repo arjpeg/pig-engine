@@ -1,6 +1,8 @@
 use std::{collections::HashSet, f32::consts::FRAC_PI_2};
 
 use glam::*;
+use wgpu::{util::*, *};
+
 use winit::{dpi::PhysicalSize, keyboard::KeyCode};
 
 /// The normal speed of the camera in space.
@@ -133,5 +135,39 @@ impl Camera {
         let PhysicalSize { width, height } = size;
 
         self.aspect = width as f32 / height as f32;
+    }
+
+    /// Creates a camera uniform buffer, and binding group (layout).
+    pub fn create_buffers(&self, device: &Device) -> (Buffer, BindGroupLayout, BindGroup) {
+        let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Camera Uniform Buffer"),
+            contents: bytemuck::cast_slice(&self.view_proj().to_cols_array()),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("Camera Bind Group Layout"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("Camera Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
+        (uniform_buffer, bind_group_layout, bind_group)
     }
 }

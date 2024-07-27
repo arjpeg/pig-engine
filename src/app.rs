@@ -40,18 +40,20 @@ pub struct App<'a> {
     last_frame: std::time::Instant,
 
     /// The noise generator used to generate terrain, etc.
-    noise: Simplex,
+    noise: noise::Simplex,
 }
 
 impl<'a> App<'a> {
     /// Sets up the renderer and camera.
     pub async fn new(window: &'a Window) -> Result<Self> {
         let camera = Camera::new(
-            vec3(10.0, 10.0, 7.0),
-            0.0,
-            -20.0f32.to_radians(),
+            vec3(6.0, 10.0, 15.0),
+            -90.0f32.to_radians(),
+            -15.0f32.to_radians(),
             window.inner_size(),
         );
+
+        let image_bytes = include_bytes!("../assets/image.png");
 
         let seed = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let noise = Simplex::new(seed.as_secs() as u32);
@@ -62,7 +64,7 @@ impl<'a> App<'a> {
         ])?;
         let chunk = Chunk::new(ivec2(0, 0), &populator);
 
-        let renderer = Renderer::new(window, &camera, &chunk).await?;
+        let renderer = Renderer::new(window, &camera, &chunk, image_bytes).await?;
 
         Ok(Self {
             renderer,
