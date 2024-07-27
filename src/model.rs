@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::mem;
 
 use crate::{chunk::*, renderer::Render};

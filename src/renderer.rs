@@ -33,6 +33,8 @@ pub struct Renderer<'s> {
     queue: wgpu::Queue,
     /// The series of steps that data takes while moving through the rendering process.
     pipeline: wgpu::RenderPipeline,
+    /// The depth texture is used to properly sort the pixels while rendering and fix z-index.
+    depth_texture: Texture,
 
     /// A reference to the surface being rendered onto.
     surface: wgpu::Surface<'s>,
@@ -96,6 +98,8 @@ impl<'s> Renderer<'s> {
         let texture = Texture::from_bytes(&device, &queue, texture_bytes, Some("Texture"))?;
         let (texture_bind_group_layout, texture_bind_group) = texture.create_bind_group(&device);
 
+        let depth_texture = Texture::create_depth_texture(&device, &surface_config);
+
         let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
         let pipeline = Self::create_pipeline(
             &device,
@@ -121,6 +125,7 @@ impl<'s> Renderer<'s> {
             camera_uniform,
             camera_bind_group,
             texture_bind_group,
+            depth_texture,
         })
     }
 
@@ -165,7 +170,13 @@ impl<'s> Renderer<'s> {
                 conservative: false,
                 unclipped_depth: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(DepthStencilState {
+                format: TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Less,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
             multisample: MultisampleState {
                 count: 1,
                 mask: !0,
@@ -256,6 +267,14 @@ impl<'s> Renderer<'s> {
                         store: StoreOp::Store,
                     },
                 })],
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(1.0),
+                        store: StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 ..Default::default()
             });
 
