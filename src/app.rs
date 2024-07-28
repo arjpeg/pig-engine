@@ -53,18 +53,14 @@ impl<'a> App<'a> {
             window.inner_size(),
         );
 
-        let image_bytes = include_bytes!("../assets/grass_side.png");
-
         let seed = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let noise = Simplex::new(seed.as_secs() as u32);
 
-        let populator = SinglesPopulator::new(vec![
-            (uvec3(8, 8, 8), Voxel::Grass),
-            (uvec3(4, 8, 8), Voxel::Grass),
-        ])?;
+        let populator = FlatFillPopulator(&[(10, Voxel::Dirt), (1, Voxel::Grass)]);
+
         let chunk = Chunk::new(ivec2(0, 0), &populator);
 
-        let renderer = Renderer::new(window, &camera, &chunk, image_bytes).await?;
+        let renderer = Renderer::new(window, &camera, &chunk).await?;
 
         Ok(Self {
             renderer,

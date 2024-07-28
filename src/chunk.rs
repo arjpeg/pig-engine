@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use anyhow::bail;
 use glam::*;
 use noise::{NoiseFn, Simplex};
@@ -16,6 +18,7 @@ pub enum Voxel {
     #[default]
     Air,
     Grass,
+    Dirt,
 }
 
 /// A collection of voxels grouped within a AABB rectangle to increase performance
@@ -35,6 +38,19 @@ pub trait Populator {
     ///
     /// All voxels are pressumed to be initialized to `Voxel::Air`.
     fn populate(&self, voxels: &mut VoxelGrid, chunk_position: Vec2);
+}
+
+impl FromStr for Voxel {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "air" => Ok(Self::Air),
+            "grass" => Ok(Self::Grass),
+            "dirt" => Ok(Self::Dirt),
+            _ => bail!("unkown voxel type, '{s}'"),
+        }
+    }
 }
 
 impl Chunk {
@@ -106,31 +122,24 @@ impl Populator for SinglesPopulator {
     }
 }
 
-/// A chunk populator where all blocks below the given height are set to
-/// the specified voxel variant.
-pub struct FlatFillPopulator(usize, Voxel);
+/// A chunk populator where all the voxels in each range are set to the specified voxel.
+/// Each range starts from where the preivious one stopped.
+pub struct FlatFillPopulator<'a>(pub &'a [(usize, Voxel)]);
 
-impl FlatFillPopulator {
-    /// Creates a new populator with the given voxel and height.
-    /// Everything below the specified height are set to the voxel.
-    /// Returns an error if the height is above the `CHUNK_HEIGHT`.
-    pub fn new(height: usize, voxel: Voxel) -> anyhow::Result<Self> {
-        if height >= CHUNK_HEIGHT {
-            bail!("specified height was greater than max chunk height")
-        } else {
-            Ok(Self(height, voxel))
-        }
-    }
-}
-
-impl Populator for FlatFillPopulator {
+impl<'a> Populator for FlatFillPopulator<'_> {
     fn populate(&self, voxels: &mut VoxelGrid, _: Vec2) {
-        for y in voxels.iter_mut().take(self.0) {
-            for z in y.iter_mut() {
-                for voxel in z.iter_mut() {
-                    *voxel = self.1;
+        let mut current_height = 0;
+
+        for (layer, voxel) in self.0 {
+            for y in current_height..*layer + current_height {
+                for z in 0..CHUNK_WIDTH {
+                    for x in 0..CHUNK_WIDTH {
+                        voxels[y][z][x] = *voxel;
+                    }
                 }
             }
+
+            current_height += layer;
         }
     }
 }

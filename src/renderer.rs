@@ -8,6 +8,7 @@ use winit::{dpi::PhysicalSize, window::Window};
 use anyhow::Result;
 
 use crate::{
+    asset_loader::load_textures,
     camera::Camera,
     chunk::Chunk,
     model::{ChunkMeshBuilder, Mesh, MeshVertex, Model, Vertex},
@@ -49,18 +50,13 @@ pub struct Renderer<'s> {
     /// The uniform bind group to which the camera's uniform is stored.
     camera_bind_group: wgpu::BindGroup,
 
-    /// The bind group to hold the texture being rendered.
+    /// The bind group to hold the array texture being rendered.
     texture_bind_group: wgpu::BindGroup,
 }
 
 impl<'s> Renderer<'s> {
     /// Creates a new renderer given a window as the surface.
-    pub async fn new(
-        window: &'s Window,
-        camera: &Camera,
-        chunk: &Chunk,
-        texture_bytes: &[u8],
-    ) -> Result<Self> {
+    pub async fn new(window: &'s Window, camera: &Camera, chunk: &Chunk) -> Result<Self> {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             flags: InstanceFlags::empty(),
@@ -95,7 +91,7 @@ impl<'s> Renderer<'s> {
         let (camera_uniform, camera_bind_group_layout, camera_bind_group) =
             camera.create_buffers(&device);
 
-        let texture = Texture::from_bytes(&device, &queue, texture_bytes, Some("Texture"))?;
+        let texture = load_textures(&device, &queue)?;
         let (texture_bind_group_layout, texture_bind_group) = texture.create_bind_group(&device);
 
         let depth_texture = Texture::create_depth_texture(&device, &surface_config);

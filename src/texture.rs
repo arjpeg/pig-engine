@@ -14,32 +14,20 @@ pub struct Texture {
 }
 
 impl Texture {
-    /// Creates a new texture from the given bytes.
-    pub fn from_bytes(
+    /// Creates a new texture from the given images. Each image represents a layer
+    /// in the array texture.
+    pub fn from_images(
         device: &Device,
         queue: &Queue,
-        bytes: &[u8],
+        images: &[DynamicImage],
         label: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let img = image::load_from_memory(bytes)?;
-
-        Self::from_image(device, queue, &img, label)
-    }
-
-    /// Creates a new texture from the given image.
-    pub fn from_image(
-        device: &Device,
-        queue: &Queue,
-        image: &DynamicImage,
-        label: Option<&str>,
-    ) -> anyhow::Result<Self> {
-        let rgba = image.to_rgba8();
-        let (width, height) = image.dimensions();
+        let (width, height) = images[0].dimensions();
 
         let size = Extent3d {
             width,
             height,
-            depth_or_array_layers: 1,
+            depth_or_array_layers: images.len() as u32,
         };
 
         let texture = device.create_texture(&TextureDescriptor {
@@ -53,21 +41,33 @@ impl Texture {
             view_formats: &[],
         });
 
-        queue.write_texture(
-            ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            &rgba,
-            ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * width),
-                rows_per_image: Some(height),
-            },
-            size,
-        );
+        for (layer, image) in images.iter().enumerate() {
+            let rgba = image.to_rgba8();
+
+            queue.write_texture(
+                ImageCopyTexture {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: layer as u32,
+                    },
+                    aspect: TextureAspect::All,
+                },
+                &rgba,
+                ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * width),
+                    rows_per_image: Some(height),
+                },
+                Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
 
         let view = texture.create_view(&TextureViewDescriptor::default());
         let sampler = device.create_sampler(&SamplerDescriptor {
@@ -97,7 +97,7 @@ impl Texture {
                     visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Texture {
                         sample_type: TextureSampleType::Float { filterable: true },
-                        view_dimension: TextureViewDimension::D2,
+                        view_dimension: TextureViewDimension::D2Array,
                         multisampled: false,
                     },
                     count: None,

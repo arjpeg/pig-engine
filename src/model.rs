@@ -1,6 +1,10 @@
 use std::mem;
 
-use crate::{chunk::*, renderer::Render};
+use crate::{
+    asset_loader::{get_texture_index, Face},
+    chunk::*,
+    renderer::Render,
+};
 use glam::*;
 use wgpu::{util::*, *};
 
@@ -30,6 +34,9 @@ pub struct MeshVertex {
     pub pos: [f32; 3],
     /// The normal vector of the vertex.
     pub normal: [f32; 3],
+    /// The index into which texture to use. The order is determined
+    /// by which textures were loaded first.
+    pub texture_index: u32,
 }
 
 /// A model in the world, consisting of its mesh(es) and material(s).
@@ -96,13 +103,13 @@ impl Mesh {
 }
 
 impl<'c> ChunkMeshBuilder<'c> {
-    const FACE_NORMALS: [[isize; 3]; 6] = [
-        [0, 1, 0],  // up
-        [0, -1, 0], // down
-        [1, 0, 0],  // right
-        [-1, 0, 0], // left
-        [0, 0, 1],  // front
-        [0, 0, -1], // back
+    const FACE_NORMALS: [(Face, [isize; 3]); 6] = [
+        (Face::Up, [0, 1, 0]),    // up
+        (Face::Down, [0, -1, 0]), // down
+        (Face::Side, [1, 0, 0]),  // right
+        (Face::Side, [-1, 0, 0]), // left
+        (Face::Side, [0, 0, 1]),  // front
+        (Face::Side, [0, 0, -1]), // back
     ];
 
     const FACE_VERTICES: [[[f32; 3]; 4]; 6] = [
@@ -180,8 +187,9 @@ impl<'c> ChunkMeshBuilder<'c> {
         }
 
         let [x, y, z] = block_pos;
+        let voxel = self.chunk.voxels[y][z][x];
 
-        for (index, face_normal) in Self::FACE_NORMALS.iter().enumerate() {
+        for (index, (face, face_normal)) in Self::FACE_NORMALS.iter().enumerate() {
             if let Some(neighbor) = Chunk::get_block_in_direction(block_pos, *face_normal) {
                 if self.chunk.is_block_full(neighbor) {
                     // the neighbor was out of bounds
@@ -201,7 +209,13 @@ impl<'c> ChunkMeshBuilder<'c> {
 
                 let pos = [x as f32 + lx, y as f32 + ly, z as f32 + lz];
 
-                self.vertices.push(MeshVertex { pos, normal });
+                self.vertices.push(MeshVertex {
+                    pos,
+                    normal,
+                    texture_index: get_texture_index(&voxel, face).expect(&format!(
+                        "could not find texture for '{voxel:?}' (face: '{face:?}')"
+                    )),
+                });
             }
 
             let offset = self
@@ -220,6 +234,7 @@ impl Vertex for MeshVertex {
     const ATTRIBS: &'static [VertexAttribute] = &vertex_attr_array![
         0 => Float32x3,
         1 => Float32x3,
+        2 => Uint32
     ];
 }
 
