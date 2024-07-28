@@ -16,6 +16,7 @@ glam = "0.28.0"
 image = "0.25.2"
 noise = "0.9.0"
 pollster = { version = "0.3.0", features = ["macro"] }
+regex = "1.10.5"
 tobj = "4.0.2"
 wgpu = "0.20.1"
 winit = "0.29"

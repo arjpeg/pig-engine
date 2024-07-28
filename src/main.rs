@@ -4,6 +4,7 @@ use app::App;
 use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
 
 mod app;
+mod asset_manager;
 mod camera;
 mod chunk;
 mod model;

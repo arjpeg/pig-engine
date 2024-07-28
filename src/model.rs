@@ -30,8 +30,6 @@ pub struct MeshVertex {
     pub pos: [f32; 3],
     /// The normal vector of the vertex.
     pub normal: [f32; 3],
-    /// The texture coordinates of the vertex.
-    pub tex_coords: [f32; 2],
 }
 
 /// A model in the world, consisting of its mesh(es) and material(s).
@@ -154,8 +152,6 @@ impl<'c> ChunkMeshBuilder<'c> {
 
     const FACE_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
 
-    const TEXTURE_COORDS: [[f32; 2]; 4] = [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]];
-
     /// Creates a new chunk mesh builder given a chunk.
     pub fn new(chunk: &'c Chunk) -> Self {
         Self {
@@ -196,20 +192,16 @@ impl<'c> ChunkMeshBuilder<'c> {
             let [fx, fy, fz] = *face_normal;
             let normal = [fx as f32, fy as f32, fz as f32];
 
-            let Some(vertices) = Self::FACE_VERTICES.get(index) else { continue; };
+            let vertices = Self::FACE_VERTICES[index];
 
-            for (index, position) in vertices.iter().enumerate() {
+            for position in vertices {
                 // the local position offset of the vertex relative
                 // to its center
                 let [lx, ly, lz] = position;
 
                 let pos = [x as f32 + lx, y as f32 + ly, z as f32 + lz];
 
-                self.vertices.push(MeshVertex {
-                    pos,
-                    normal,
-                    tex_coords: Self::TEXTURE_COORDS[index],
-                });
+                self.vertices.push(MeshVertex { pos, normal });
             }
 
             let offset = self
@@ -228,7 +220,6 @@ impl Vertex for MeshVertex {
     const ATTRIBS: &'static [VertexAttribute] = &vertex_attr_array![
         0 => Float32x3,
         1 => Float32x3,
-        2 => Float32x2
     ];
 }
 
