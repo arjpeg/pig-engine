@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use egui::Context;
 use glam::Mat4;
 
 use wgpu::*;
@@ -11,6 +12,7 @@ use crate::{
     asset_loader::load_textures,
     camera::Camera,
     chunk::Chunk,
+    egui_renderer::EguiRenderer,
     model::{ChunkMeshBuilder, Mesh, MeshVertex, Model, Vertex},
     texture::Texture,
 };
@@ -26,7 +28,6 @@ pub trait Render<'a, T> {
     fn draw_object_instanced(&mut self, value: &'a T, instances: Range<u32>);
 }
 
-#[derive(Debug)]
 pub struct Renderer<'s> {
     /// The actual physical device responsible for rendering things (most likely the GPU).
     device: wgpu::Device,
@@ -41,6 +42,9 @@ pub struct Renderer<'s> {
     surface: wgpu::Surface<'s>,
     /// The configuration of the `surface`.
     surface_config: wgpu::SurfaceConfiguration,
+
+    /// The renderer for egui.
+    egui_renderer: crate::egui_renderer::EguiRenderer<'s>,
 
     /// The model currently being rendered.
     model: crate::model::Model,
@@ -88,6 +92,8 @@ impl<'s> Renderer<'s> {
         let surface_config = Self::get_surface_config(&adapter, &surface, window.inner_size());
         surface.configure(&device, &surface_config);
 
+        let egui_renderer = EguiRenderer::new(window, &device, surface_config.format);
+
         let (camera_uniform, camera_bind_group_layout, camera_bind_group) =
             camera.create_buffers(&device);
 
@@ -117,6 +123,7 @@ impl<'s> Renderer<'s> {
             pipeline,
             surface,
             surface_config,
+            egui_renderer,
             model,
             camera_uniform,
             camera_bind_group,
@@ -236,7 +243,7 @@ impl<'s> Renderer<'s> {
     }
 
     /// Renders the currently bound vertex buffer onto the `surface`.
-    pub fn render(&self) -> std::result::Result<(), SurfaceError> {
+    pub fn render(&mut self, ui: impl FnOnce(&Context)) -> std::result::Result<(), SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&TextureViewDescriptor {
             label: Some("Rendering View"),
@@ -283,6 +290,9 @@ impl<'s> Renderer<'s> {
 
             render_pass.draw_object(&self.model);
         };
+
+        self.egui_renderer
+            .render(&self.device, &self.queue, &mut encoder, &view, ui);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();

@@ -7,6 +7,7 @@ mod app;
 mod asset_loader;
 mod camera;
 mod chunk;
+mod egui_renderer;
 mod model;
 mod renderer;
 mod texture;

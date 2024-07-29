@@ -3,6 +3,7 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
+use egui::Context;
 use glam::*;
 use noise::Simplex;
 use wgpu::SurfaceError;
@@ -19,7 +20,6 @@ use anyhow::Result;
 
 /// The main application struct that holds all the data and state of the
 /// application.
-#[derive(Debug)]
 pub struct App<'a> {
     /// The renderer responsible for interacting with wgpu and setting up the
     /// rendering device, and drawing out a scene.
@@ -180,12 +180,21 @@ impl<'a> App<'a> {
 
     /// Renders everything onto the surface.
     fn render(&mut self) {
-        match self.renderer.render() {
+        match self.renderer.render(|ui| Self::ui(ui, &self.camera)) {
             Ok(_) => {}
             // If we are out of memory, just quit the app
             Err(SurfaceError::OutOfMemory) => panic!("out of memory - stopping application"),
             // For other errors, they will be gone by the next frame
             Err(error) => eprintln!("{error}"),
         };
+    }
+
+    /// Renders all egui windows.
+    fn ui(ui: &Context, camera: &Camera) {
+        use egui::*;
+
+        Window::new("hello").show(ui, |ui| {
+            ui.label(format!("position: {:?}", camera.eye));
+        });
     }
 }
