@@ -40,8 +40,8 @@ impl<'a> App<'a> {
     /// Sets up the renderer and camera.
     pub async fn new(window: &'a Window) -> Result<Self> {
         let camera = Camera::new(
-            vec3(0.0, 50.0, 0.0),
-            -90.0f32.to_radians(),
+            vec3(-33.0, 20.0, 50.0),
+            -45.0f32.to_radians(),
             -15.0f32.to_radians(),
             window.inner_size(),
         );

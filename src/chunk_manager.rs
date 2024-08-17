@@ -8,12 +8,12 @@ use crate::{chunk::*, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 32;
+pub const CHUNK_LOAD_RADIUS: usize = 16;
 
 /// The maximum number of chunks whose voxel generation can be built per frame.
-pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 30;
+pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 15;
 /// The maximum number of chunks whose mesh can be built per frame.
-pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 5;
+pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 15;
 
 /// Manages the loading and unloading of chunks around the player.
 pub struct ChunkManager {
@@ -49,9 +49,11 @@ impl ChunkManager {
 
         noise.set_noise_type(NoiseType::PerlinFractal);
         noise.set_fractal_type(FractalType::FBM);
+
         noise.set_fractal_octaves(8);
         noise.set_fractal_gain(0.6);
         noise.set_fractal_lacunarity(2.0);
+
         noise.set_frequency(2.0);
 
         Self {
@@ -70,7 +72,7 @@ impl ChunkManager {
             (position.z as i32).div_euclid(CHUNK_WIDTH as i32),
         );
 
-        let chunks = Self::get_chunks_around(chunk, CHUNK_LOAD_RADIUS + 1);
+        let chunks = Self::get_chunks_around(chunk, CHUNK_LOAD_RADIUS);
 
         for chunk in chunks {
             if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
@@ -79,6 +81,20 @@ impl ChunkManager {
 
             if !self.build_queue.contains(&chunk) && !self.meshes.contains_key(&chunk) {
                 self.build_queue.push(chunk);
+            }
+        }
+
+        // generate voxel data for padding chunks
+        for z in [-3, 3] {
+            for x in [-3, 3] {
+                let chunk = ivec2(
+                    chunk.x + x * CHUNK_LOAD_RADIUS as i32,
+                    chunk.y + z * CHUNK_LOAD_RADIUS as i32,
+                );
+
+                if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
+                    self.load_queue.push(chunk);
+                }
             }
         }
 
@@ -91,21 +107,21 @@ impl ChunkManager {
         self.meshes.values_mut().for_each(|m| match m {
             MeshLoadState::Uploaded(_) => {}
             MeshLoadState::Todo((vertices, indices)) => {
-                *m = MeshLoadState::Uploaded(Mesh::new(&vertices, &indices, device));
+                *m = MeshLoadState::Uploaded(Mesh::new(vertices, indices, device));
             }
         });
     }
 
     /// Loads upto `MAX_CHUNK_GENERATION_PER_FRAME` chunks that are currently in the load queue.
     fn load_chunks(&mut self) {
-        let populator = SimplexPopulator::new(&self.noise);
-
         for _ in 0..MAX_CHUNK_GENERATION_PER_FRAME {
             let Some(position) = self.load_queue.pop() else {
                 break;
             };
 
-            let chunk = Chunk::new(position, &populator);
+            let mut chunk = Chunk::new(position);
+            chunk.generate(ChunkGenerator::Flat);
+
             self.chunks.insert(position, chunk);
         }
     }
@@ -120,14 +136,13 @@ impl ChunkManager {
                 break;
             };
 
-            let Some(chunk) = self.chunks.get(&position) else {
+            if !self.chunks.contains_key(&position) {
                 // put the chunk back in the queue, it's voxel data hasn't been loaded
                 queue.push(position);
-
                 continue;
-            };
+            }
 
-            let mesh = ChunkMeshBuilder::new(chunk).build();
+            let mesh = ChunkMeshBuilder::new(&self.chunks, position).build();
             self.meshes.insert(position, MeshLoadState::Todo(mesh));
         }
 
@@ -136,17 +151,17 @@ impl ChunkManager {
 
     /// Gets the chunks around a chunk in the provided radius.
     fn get_chunks_around(position: IVec2, radius: usize) -> Vec<IVec2> {
-        let mut chunks = Vec::with_capacity(radius * radius);
+        let mut positions = Vec::with_capacity(radius * radius);
 
         let radius = radius as i32;
 
         for x in -radius..=radius {
             for z in -radius..=radius {
-                chunks.push(position + ivec2(x, z));
+                positions.push(position + ivec2(x, z));
             }
         }
 
-        chunks
+        positions
     }
 
     /// Returns all the meshes that have been uploaded to the GPU, and

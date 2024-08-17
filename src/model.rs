@@ -1,4 +1,4 @@
-use std::mem;
+use std::{collections::HashMap, mem};
 
 use crate::{
     asset_loader::{get_texture_index, Face},
@@ -63,6 +63,8 @@ pub struct Mesh {
 pub struct ChunkMeshBuilder<'a> {
     /// The chunk whose mesh is being built.
     chunk: &'a crate::chunk::Chunk,
+    /// A list of the chunks surrounding the chunk.
+    chunks: &'a HashMap<glam::IVec2, crate::chunk::Chunk>,
 
     /// The vertices generated so far.
     vertices: Vec<MeshVertex>,
@@ -160,9 +162,12 @@ impl<'c> ChunkMeshBuilder<'c> {
     const FACE_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
 
     /// Creates a new chunk mesh builder given a chunk.
-    pub fn new(chunk: &'c Chunk) -> Self {
+    pub fn new(chunks: &'c HashMap<IVec2, Chunk>, chunk: IVec2) -> Self {
         Self {
-            chunk,
+            chunk: chunks
+                .get(&chunk)
+                .expect("cannot build mesh for unloaded chunk"),
+            chunks,
             vertices: Vec::new(),
             indices: Vec::new(),
         }
@@ -181,6 +186,24 @@ impl<'c> ChunkMeshBuilder<'c> {
         (self.vertices, self.indices)
     }
 
+    /// Returns whether the given voxel position (in world space) is solid.
+    fn is_solid(&self, [x, y, z]: [isize; 3]) -> bool {
+        let position = ivec2(
+            x.div_euclid(CHUNK_WIDTH as isize) as i32,
+            z.div_euclid(CHUNK_WIDTH as isize) as i32,
+        );
+
+        let Some(chunk) = self.chunks.get(&position) else {
+            // the neighbor chunk hasn't been loaded yet.
+            return false;
+        };
+
+        chunk.is_block_full(match chunk.get_local_position([x, y, z]) {
+            Some(pos) => pos,
+            None => return false,
+        })
+    }
+
     fn add_block(&mut self, block_pos: [usize; 3]) {
         if !self.chunk.is_block_full(block_pos) {
             return;
@@ -193,12 +216,9 @@ impl<'c> ChunkMeshBuilder<'c> {
         let chunk_z_offset = self.chunk.position.y as f32 * CHUNK_WIDTH as f32;
 
         for (index, (face, face_normal)) in Self::FACE_NORMALS.iter().enumerate() {
-            if let Some(neighbor) = Chunk::get_block_in_direction(block_pos, *face_normal) {
-                if self.chunk.is_block_full(neighbor) {
-                    // the neighbor was out of bounds
-                    continue;
-                }
-            };
+            if self.is_solid(self.chunk.get_world_position(block_pos, *face_normal)) {
+                continue;
+            }
 
             let [fx, fy, fz] = *face_normal;
             let normal = [fx as f32, fy as f32, fz as f32];

@@ -1,7 +1,6 @@
-use std::str::FromStr;
+use std::{isize, str::FromStr};
 
 use anyhow::bail;
-use bracket_noise::prelude::FastNoise;
 use glam::*;
 
 /// The width of a chunk (xz length).
@@ -31,43 +30,32 @@ pub struct Chunk {
     pub position: glam::IVec2,
 }
 
-/// A strategy to populate the voxels of a given chunk.
-pub trait Populator {
-    /// Fills in (some) of the voxels of the chunk given its position,
-    /// based on some strategy.
-    ///
-    /// All voxels are pressumed to be initialized to `Voxel::Air`.
-    fn populate(&self, voxels: &mut VoxelGrid, chunk_position: Vec2);
-}
-
-impl FromStr for Voxel {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "air" => Ok(Self::Air),
-            "grass" => Ok(Self::Grass),
-            "dirt" => Ok(Self::Dirt),
-            _ => bail!("unkown voxel type, '{s}'"),
-        }
-    }
+/// A generator for populating the voxels of a chunk.
+#[derive(Debug)]
+pub enum ChunkGenerator {
+    /// A generator that generates a flat world.
+    Flat,
+    /// A generator that generates a world with some noise.
+    Noise(),
 }
 
 impl Chunk {
-    /// Creates a new chunk with the given generation strategy, and position.
-    pub fn new(position: IVec2, generator: &impl Populator) -> Self {
-        let mut voxels = Box::new([[[Voxel::Air; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT]);
-        generator.populate(&mut voxels, position.as_vec2());
+    /// Creates a new chunk at the given position.
+    pub fn new(position: IVec2) -> Self {
+        let voxels = Box::new([[[Voxel::Air; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT]);
 
         Self { voxels, position }
     }
 
+    /// Fills the chunk with voxels using the provided generator.
+    pub fn generate(&mut self, generator: ChunkGenerator) {
+        generator.generate(self);
+    }
+
     /// Returns whether the provided position is in the confines of the chunk,
     /// not accounting for the chunk's position.
-    pub fn in_local_bounds(position: UVec3) -> bool {
-        let UVec3 { x, y, z } = position;
-
-        (x as usize) < CHUNK_WIDTH && (z as usize) < CHUNK_WIDTH && (y as usize) < CHUNK_HEIGHT
+    pub fn in_local_bounds([x, y, z]: [usize; 3]) -> bool {
+        x < CHUNK_WIDTH && z < CHUNK_WIDTH && y < CHUNK_HEIGHT
     }
 
     /// Returns if the voxel at the given position is non empty (not air).
@@ -89,90 +77,74 @@ impl Chunk {
 
         Some([x, y, z])
     }
-}
 
-/// A chunk populator where the provided positions are populated with the given
-/// Voxel variants.
-pub struct SinglesPopulator(Vec<(UVec3, Voxel)>);
+    /// Returns the world position of a voxel with some delta direction.
+    /// This position may not be within the bounds of the chunk.
+    pub fn get_world_position(
+        &self,
+        [x, y, z]: [usize; 3],
+        [dx, dy, dz]: [isize; 3],
+    ) -> [isize; 3] {
+        let chunk_x_offset = self.position.x as isize * CHUNK_WIDTH as isize;
+        let chunk_z_offset = self.position.y as isize * CHUNK_WIDTH as isize;
 
-impl SinglesPopulator {
-    /// Creates a new generator with the given voxel positions (relative to the chunk),
-    /// and voxel types. Returns an error if any of the positions are outside of the
-    /// bounds of the chunk.
-    pub fn new(voxel_data: Vec<(UVec3, Voxel)>) -> anyhow::Result<Self> {
-        let out_of_bounds = voxel_data
-            .iter()
-            .any(|(pos, _)| !Chunk::in_local_bounds(*pos));
+        [
+            x as isize + dx + chunk_x_offset,
+            y as isize + dy,
+            z as isize + dz + chunk_z_offset,
+        ]
+    }
 
-        if out_of_bounds {
-            bail!("voxel position was out of bounds")
+    /// Returns the local position of a voxel, given a world position.
+    pub fn get_local_position(&self, [x, y, z]: [isize; 3]) -> Option<[usize; 3]> {
+        let chunk_x_offset = self.position.x as isize * CHUNK_WIDTH as isize;
+        let chunk_z_offset = self.position.y as isize * CHUNK_WIDTH as isize;
+
+        let x = x - chunk_x_offset;
+        let z = z - chunk_z_offset;
+
+        if y < 0 {
+            None
         } else {
-            Ok(Self(voxel_data))
+            Some([x as usize, y as usize, z as usize])
         }
     }
 }
 
-impl Populator for SinglesPopulator {
-    fn populate(&self, voxels: &mut VoxelGrid, _: Vec2) {
-        for (position, voxel) in self.0.clone() {
-            let UVec3 { x, y, z } = position;
-
-            voxels[y as usize][z as usize][x as usize] = voxel;
+impl ChunkGenerator {
+    pub fn generate(&self, chunk: &mut Chunk) {
+        match self {
+            Self::Flat => self.apply_flat(chunk),
+            _ => todo!(),
         }
     }
-}
 
-/// A chunk populator where all the voxels in each range are set to the specified voxel.
-/// Each range starts from where the preivious one stopped.
-pub struct FlatFillPopulator<'a>(pub &'a [(usize, Voxel)]);
+    fn apply_flat(&self, chunk: &mut Chunk) {
+        for y in 0..CHUNK_HEIGHT {
+            for z in 0..CHUNK_WIDTH {
+                for x in 0..CHUNK_WIDTH {
+                    let voxel = match y {
+                        0..10 => Voxel::Dirt,
+                        10..11 => Voxel::Grass,
+                        _ => continue,
+                    };
 
-impl<'a> Populator for FlatFillPopulator<'_> {
-    fn populate(&self, voxels: &mut VoxelGrid, _: Vec2) {
-        let mut current_height = 0;
-
-        for (layer, voxel) in self.0 {
-            for y in current_height..*layer + current_height {
-                for z in 0..CHUNK_WIDTH {
-                    for x in 0..CHUNK_WIDTH {
-                        voxels[y][z][x] = *voxel;
-                    }
+                    chunk.voxels[y][z][x] = voxel;
                 }
             }
-
-            current_height += layer;
         }
     }
 }
 
-/// A chunk populator where the voxel data is sampled using 3d simplex noise.
-pub struct SimplexPopulator<'a>(&'a FastNoise);
+impl FromStr for Voxel {
+    type Err = anyhow::Error;
 
-impl<'a> SimplexPopulator<'a> {
-    /// Creates a new populator given the noise sampler.
-    pub fn new(sampler: &'a FastNoise) -> Self {
-        Self(sampler)
-    }
-}
-
-impl Populator for SimplexPopulator<'_> {
-    fn populate(&self, voxels: &mut VoxelGrid, chunk_position: Vec2) {
-        for z in 0..CHUNK_WIDTH {
-            for x in 0..CHUNK_WIDTH {
-                let position = [
-                    (x as f32 + chunk_position.x as f32 * CHUNK_WIDTH as f32) / 1000.0,
-                    (z as f32 + chunk_position.y as f32 * CHUNK_WIDTH as f32) / 1000.0,
-                ];
-
-                let height = ((self.0.get_noise(position[0], position[1]) + 1.0)
-                    * 0.5
-                    * CHUNK_HEIGHT as f32) as usize;
-
-                for y in 0..height {
-                    voxels[y][z][x] = Voxel::Dirt;
-                }
-
-                voxels[height][z][x] = Voxel::Grass;
-            }
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "air" => Ok(Self::Air),
+            "grass" => Ok(Self::Grass),
+            "dirt" => Ok(Self::Dirt),
+            _ => bail!("unkown voxel type, '{s}'"),
         }
     }
 }

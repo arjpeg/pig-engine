@@ -8,7 +8,7 @@ use winit::{dpi::PhysicalSize, keyboard::KeyCode};
 /// The normal speed of the camera in space.
 pub const CAMERA_NORMAL_SPEED: f32 = 20.0;
 /// The speed of the camera when the boost speed key (L_CTRL) is pressed.
-pub const CAMERA_BOOST_SPEED: f32 = 175.0;
+pub const CAMERA_BOOST_SPEED: f32 = 50.0;
 /// The speed of the camera when the slow modifier key (L_ALT) is pressed.
 pub const CAMERA_SLOW_SPEED: f32 = 10.0;
 
