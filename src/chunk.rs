@@ -1,13 +1,13 @@
 use std::str::FromStr;
 
 use anyhow::bail;
+use bracket_noise::prelude::FastNoise;
 use glam::*;
-use noise::{NoiseFn, Simplex};
 
 /// The width of a chunk (xz length).
 pub const CHUNK_WIDTH: usize = 16;
 /// The height of a chunk (y length).
-pub const CHUNK_HEIGHT: usize = 256;
+pub const CHUNK_HEIGHT: usize = 128;
 
 /// A 3d grid of voxels.
 pub type VoxelGrid = [[[Voxel; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT];
@@ -28,7 +28,7 @@ pub struct Chunk {
     /// The list of voxels stored contiguously in memory.
     pub voxels: Box<VoxelGrid>,
     /// The position of the chunk within the world along the xz axis.
-    position: glam::IVec2,
+    pub position: glam::IVec2,
 }
 
 /// A strategy to populate the voxels of a given chunk.
@@ -145,30 +145,33 @@ impl<'a> Populator for FlatFillPopulator<'_> {
 }
 
 /// A chunk populator where the voxel data is sampled using 3d simplex noise.
-pub struct SimplexPopulator<'a>(&'a Simplex);
+pub struct SimplexPopulator<'a>(&'a FastNoise);
 
 impl<'a> SimplexPopulator<'a> {
     /// Creates a new populator given the noise sampler.
-    pub fn new(sampler: &'a Simplex) -> Self {
+    pub fn new(sampler: &'a FastNoise) -> Self {
         Self(sampler)
     }
 }
 
 impl Populator for SimplexPopulator<'_> {
     fn populate(&self, voxels: &mut VoxelGrid, chunk_position: Vec2) {
-        for y in 0..CHUNK_HEIGHT {
-            for z in 0..CHUNK_WIDTH {
-                for x in 0..CHUNK_WIDTH {
-                    let position = [
-                        x as f64 + chunk_position.x as f64,
-                        y as f64,
-                        z as f64 + chunk_position.y as f64,
-                    ];
+        for z in 0..CHUNK_WIDTH {
+            for x in 0..CHUNK_WIDTH {
+                let position = [
+                    (x as f32 + chunk_position.x as f32 * CHUNK_WIDTH as f32) / 1000.0,
+                    (z as f32 + chunk_position.y as f32 * CHUNK_WIDTH as f32) / 1000.0,
+                ];
 
-                    if self.0.get(position) > 0.5 {
-                        voxels[y][z][x] = Voxel::Grass;
-                    }
+                let height = ((self.0.get_noise(position[0], position[1]) + 1.0)
+                    * 0.5
+                    * CHUNK_HEIGHT as f32) as usize;
+
+                for y in 0..height {
+                    voxels[y][z][x] = Voxel::Dirt;
                 }
+
+                voxels[height][z][x] = Voxel::Grass;
             }
         }
     }

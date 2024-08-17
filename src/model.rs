@@ -189,6 +189,9 @@ impl<'c> ChunkMeshBuilder<'c> {
         let [x, y, z] = block_pos;
         let voxel = self.chunk.voxels[y][z][x];
 
+        let chunk_x_offset = self.chunk.position.x as f32 * CHUNK_WIDTH as f32;
+        let chunk_z_offset = self.chunk.position.y as f32 * CHUNK_WIDTH as f32;
+
         for (index, (face, face_normal)) in Self::FACE_NORMALS.iter().enumerate() {
             if let Some(neighbor) = Chunk::get_block_in_direction(block_pos, *face_normal) {
                 if self.chunk.is_block_full(neighbor) {
@@ -207,7 +210,11 @@ impl<'c> ChunkMeshBuilder<'c> {
                 // to its center
                 let [lx, ly, lz] = position;
 
-                let pos = [x as f32 + lx, y as f32 + ly, z as f32 + lz];
+                let pos = [
+                    x as f32 + lx + chunk_x_offset,
+                    y as f32 + ly,
+                    z as f32 + lz + chunk_z_offset,
+                ];
 
                 self.vertices.push(MeshVertex {
                     pos,
@@ -238,16 +245,16 @@ impl Vertex for MeshVertex {
     ];
 }
 
-impl<'a, 'rp> Render<'a, Model> for RenderPass<'rp>
+impl<'a, 'rp> Render<'a, Mesh> for RenderPass<'rp>
 where
     'a: 'rp,
 {
-    fn draw_object_instanced(&mut self, model: &'a Model, instances: std::ops::Range<u32>) {
+    fn draw_object_instanced(&mut self, mesh: &'a Mesh, instances: std::ops::Range<u32>) {
         let Mesh {
             vertex_buffer,
             index_buffer,
             count,
-        } = &model.mesh;
+        } = mesh;
 
         self.set_vertex_buffer(0, vertex_buffer.slice(..));
         self.set_index_buffer(index_buffer.slice(..), IndexFormat::Uint32);

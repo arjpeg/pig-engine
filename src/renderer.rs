@@ -11,9 +11,8 @@ use anyhow::Result;
 use crate::{
     asset_loader::load_textures,
     camera::Camera,
-    chunk::Chunk,
     egui_renderer::EguiRenderer,
-    model::{ChunkMeshBuilder, Mesh, MeshVertex, Model, Vertex},
+    model::{Mesh, MeshVertex, Model, Vertex},
     texture::Texture,
 };
 
@@ -30,7 +29,7 @@ pub trait Render<'a, T> {
 
 pub struct Renderer<'s> {
     /// The actual physical device responsible for rendering things (most likely the GPU).
-    device: wgpu::Device,
+    pub device: wgpu::Device,
     /// The queue of commands being staged to be sent to the `device`.
     queue: wgpu::Queue,
     /// The series of steps that data takes while moving through the rendering process.
@@ -46,8 +45,8 @@ pub struct Renderer<'s> {
     /// The renderer for egui.
     egui_renderer: crate::egui_renderer::EguiRenderer<'s>,
 
-    /// The model currently being rendered.
-    model: crate::model::Model,
+    /// The models currently being rendered.
+    models: Vec<crate::model::Model>,
 
     /// A uniform buffer to hold the camera's view-projection matrix.
     camera_uniform: wgpu::Buffer,
@@ -60,7 +59,7 @@ pub struct Renderer<'s> {
 
 impl<'s> Renderer<'s> {
     /// Creates a new renderer given a window as the surface.
-    pub async fn new(window: &'s Window, camera: &Camera, chunk: &Chunk) -> Result<Self> {
+    pub async fn new(window: &'s Window, camera: &Camera) -> Result<Self> {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             flags: InstanceFlags::empty(),
@@ -110,12 +109,7 @@ impl<'s> Renderer<'s> {
             &[&camera_bind_group_layout, &texture_bind_group_layout],
         );
 
-        let (vertices, indices) = ChunkMeshBuilder::new(chunk).build();
-
-        println!("num vertices: {}", vertices.len());
-        println!("num indices: {}", indices.len());
-
-        let model = Model::new(Mesh::new(&vertices, &indices, &device));
+        let models = Vec::new();
 
         Ok(Self {
             device,
@@ -124,7 +118,7 @@ impl<'s> Renderer<'s> {
             surface,
             surface_config,
             egui_renderer,
-            model,
+            models,
             camera_uniform,
             camera_bind_group,
             texture_bind_group,
@@ -243,7 +237,11 @@ impl<'s> Renderer<'s> {
     }
 
     /// Renders the currently bound vertex buffer onto the `surface`.
-    pub fn render(&mut self, ui: impl FnOnce(&Context)) -> std::result::Result<(), SurfaceError> {
+    pub fn render<'a>(
+        &mut self,
+        meshes: impl Iterator<Item = &'a Mesh>,
+        ui: impl FnOnce(&Context),
+    ) -> std::result::Result<(), SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&TextureViewDescriptor {
             label: Some("Rendering View"),
@@ -288,7 +286,9 @@ impl<'s> Renderer<'s> {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.texture_bind_group, &[]);
 
-            render_pass.draw_object(&self.model);
+            for model in meshes {
+                render_pass.draw_object(model);
+            }
         };
 
         self.egui_renderer

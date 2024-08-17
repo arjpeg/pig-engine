@@ -11,13 +11,13 @@ opt-level = 3
 
 [dependencies]
 anyhow = "1.0.86"
+bracket-noise = "0.8.7"
 bytemuck = { version = "1.16.1", features = ["derive"] }
 egui = "0.28.1"
 egui-wgpu = "0.28.1"
 egui-winit = "0.28.1"
 glam = "0.28.0"
 image = "0.25.2"
-noise = "0.9.0"
 pollster = { version = "0.3.0", features = ["macro"] }
 regex = "1.10.5"
 tobj = "4.0.2"

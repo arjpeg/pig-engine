@@ -1,11 +1,7 @@
-use std::{
-    collections::HashSet,
-    time::{Instant, SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashSet, time::Instant};
 
 use egui::Context;
 use glam::*;
-use noise::Simplex;
 use wgpu::SurfaceError;
 use winit::{
     event::{DeviceEvent, ElementState, Event, KeyEvent, WindowEvent},
@@ -14,7 +10,7 @@ use winit::{
     window::{CursorGrabMode, Window},
 };
 
-use crate::{camera::Camera, chunk::*, renderer::Renderer};
+use crate::{camera::Camera, chunk_manager::ChunkManager, renderer::Renderer};
 
 use anyhow::Result;
 
@@ -27,9 +23,6 @@ pub struct App<'a> {
     /// The camera in 3d space representing the player.
     camera: crate::camera::Camera,
 
-    /// The only chunk in the world for now.
-    chunk: crate::chunk::Chunk,
-
     /// Represents whether the app is currently in focus and locked or not.
     has_focus: bool,
 
@@ -39,37 +32,29 @@ pub struct App<'a> {
     /// The time of the last rendering frame.
     last_frame: std::time::Instant,
 
-    /// The noise generator used to generate terrain, etc.
-    noise: noise::Simplex,
+    /// The chunk manager used to manage chunks around the player.
+    chunk_manager: crate::chunk_manager::ChunkManager,
 }
 
 impl<'a> App<'a> {
     /// Sets up the renderer and camera.
     pub async fn new(window: &'a Window) -> Result<Self> {
         let camera = Camera::new(
-            vec3(6.0, 10.0, 15.0),
+            vec3(0.0, 50.0, 0.0),
             -90.0f32.to_radians(),
             -15.0f32.to_radians(),
             window.inner_size(),
         );
 
-        let seed = SystemTime::now().duration_since(UNIX_EPOCH)?;
-        let noise = Simplex::new(seed.as_secs() as u32);
-
-        let populator = FlatFillPopulator(&[(10, Voxel::Dirt), (1, Voxel::Grass)]);
-
-        let chunk = Chunk::new(ivec2(0, 0), &populator);
-
-        let renderer = Renderer::new(window, &camera, &chunk).await?;
+        let renderer = Renderer::new(window, &camera).await?;
 
         Ok(Self {
             renderer,
             camera,
-            chunk,
-            noise,
             has_focus: false,
             keys_held: HashSet::new(),
             last_frame: Instant::now(),
+            chunk_manager: ChunkManager::new(),
         })
     }
 
@@ -143,6 +128,10 @@ impl<'a> App<'a> {
 
                     self.last_frame = Instant::now();
 
+                    self.chunk_manager.update(self.camera.eye);
+                    self.chunk_manager
+                        .resolve_mesh_uploads(&self.renderer.device);
+
                     self.renderer.update_camera_buffer(self.camera.view_proj());
                     self.render();
                 }
@@ -180,7 +169,12 @@ impl<'a> App<'a> {
 
     /// Renders everything onto the surface.
     fn render(&mut self) {
-        match self.renderer.render(|ui| Self::ui(ui, &self.camera)) {
+        let meshes = self.chunk_manager.loaded_meshes();
+
+        match self
+            .renderer
+            .render(meshes, |ui| Self::ui(ui, &self.camera, &self.chunk_manager))
+        {
             Ok(_) => {}
             // If we are out of memory, just quit the app
             Err(SurfaceError::OutOfMemory) => panic!("out of memory - stopping application"),
@@ -190,11 +184,13 @@ impl<'a> App<'a> {
     }
 
     /// Renders all egui windows.
-    fn ui(ui: &Context, camera: &Camera) {
+    fn ui(ui: &Context, camera: &Camera, chunk_manager: &ChunkManager) {
         use egui::*;
 
         Window::new("hello").show(ui, |ui| {
             ui.label(format!("position: {:?}", camera.eye));
+            ui.label(format!("chunks loaded: {}", chunk_manager.chunks_loaded()));
+            ui.label(format!("meshes built: {}", chunk_manager.meshes_loaded()));
         });
     }
 }

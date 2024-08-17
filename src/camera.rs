@@ -6,11 +6,11 @@ use wgpu::{util::*, *};
 use winit::{dpi::PhysicalSize, keyboard::KeyCode};
 
 /// The normal speed of the camera in space.
-pub const CAMERA_NORMAL_SPEED: f32 = 5.0;
+pub const CAMERA_NORMAL_SPEED: f32 = 20.0;
 /// The speed of the camera when the boost speed key (L_CTRL) is pressed.
-pub const CAMERA_BOOST_SPEED: f32 = 10.0;
+pub const CAMERA_BOOST_SPEED: f32 = 75.0;
 /// The speed of the camera when the slow modifier key (L_ALT) is pressed.
-pub const CAMERA_SLOW_SPEED: f32 = 1.25;
+pub const CAMERA_SLOW_SPEED: f32 = 10.0;
 
 /// The sensitivity of the camera.
 pub const CAMERA_SENSITIVITY: f32 = 0.15;
@@ -84,7 +84,7 @@ impl Camera {
         self.yaw += dt * dx as f32 * CAMERA_SENSITIVITY;
         self.pitch -= dt * dy as f32 * CAMERA_SENSITIVITY;
 
-        self.pitch = self.pitch.clamp(-FRAC_PI_2, FRAC_PI_2);
+        self.pitch = self.pitch.clamp(-FRAC_PI_2 + 0.001, FRAC_PI_2 - 0.001);
         self.forward = Self::calculate_forward(self.yaw, self.pitch);
     }
 
