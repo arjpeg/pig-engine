@@ -219,9 +219,9 @@ impl<'c> ChunkMeshBuilder<'c> {
                 self.vertices.push(MeshVertex {
                     pos,
                     normal,
-                    texture_index: get_texture_index(&voxel, face).expect(&format!(
-                        "could not find texture for '{voxel:?}' (face: '{face:?}')"
-                    )),
+                    texture_index: get_texture_index(&voxel, face).unwrap_or_else(|| {
+                        panic!("could not find texture for '{voxel:?}' (face: '{face:?}')")
+                    }),
                 });
             }
 

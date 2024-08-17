@@ -69,7 +69,7 @@ impl<'w> EguiRenderer<'w> {
 
         for (id, image_delta) in &full_output.textures_delta.set {
             self.renderer
-                .update_texture(&device, &queue, *id, &image_delta);
+                .update_texture(device, queue, *id, image_delta);
         }
 
         let PhysicalSize { width, height } = self.window.inner_size();
@@ -80,12 +80,12 @@ impl<'w> EguiRenderer<'w> {
         };
 
         self.renderer
-            .update_buffers(&device, &queue, encoder, &tris, &screen_descriptor);
+            .update_buffers(device, queue, encoder, &tris, &screen_descriptor);
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,

@@ -171,10 +171,9 @@ impl<'a> App<'a> {
     fn render(&mut self) {
         let meshes = self.chunk_manager.loaded_meshes();
 
-        match self
-            .renderer
-            .render(meshes, |ui| Self::ui(ui, &self.camera, &self.chunk_manager))
-        {
+        match self.renderer.render(&meshes, |ui| {
+            Self::ui(ui, &self.camera, &self.chunk_manager)
+        }) {
             Ok(_) => {}
             // If we are out of memory, just quit the app
             Err(SurfaceError::OutOfMemory) => panic!("out of memory - stopping application"),
@@ -187,8 +186,9 @@ impl<'a> App<'a> {
     fn ui(ui: &Context, camera: &Camera, chunk_manager: &ChunkManager) {
         use egui::*;
 
-        Window::new("hello").show(ui, |ui| {
+        Window::new("debug").show(ui, |ui| {
             ui.label(format!("position: {:?}", camera.eye));
+
             ui.label(format!("chunks loaded: {}", chunk_manager.chunks_loaded()));
             ui.label(format!("meshes built: {}", chunk_manager.meshes_loaded()));
         });

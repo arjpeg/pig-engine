@@ -12,7 +12,7 @@ use crate::{
     asset_loader::load_textures,
     camera::Camera,
     egui_renderer::EguiRenderer,
-    model::{Mesh, MeshVertex, Model, Vertex},
+    model::{Mesh, MeshVertex, Vertex},
     texture::Texture,
 };
 
@@ -237,9 +237,9 @@ impl<'s> Renderer<'s> {
     }
 
     /// Renders the currently bound vertex buffer onto the `surface`.
-    pub fn render<'a>(
+    pub fn render(
         &mut self,
-        meshes: impl Iterator<Item = &'a Mesh>,
+        meshes: &[&Mesh],
         ui: impl FnOnce(&Context),
     ) -> std::result::Result<(), SurfaceError> {
         let output = self.surface.get_current_texture()?;

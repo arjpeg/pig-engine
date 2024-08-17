@@ -4,12 +4,16 @@ use bracket_noise::prelude::*;
 use glam::{ivec2, IVec2, Vec3};
 use wgpu::Device;
 
-use crate::{
-    chunk::{Chunk, SimplexPopulator, CHUNK_WIDTH},
-    model::{ChunkMeshBuilder, Mesh},
-};
+use crate::{chunk::*, model::*};
 
-pub const CHUNK_LOAD_RADIUS: usize = 10;
+/// The radius around the player in which chunks are loaded. One extra chunk
+/// in both the x and z axes are loaded as padding for mesh generation.
+pub const CHUNK_LOAD_RADIUS: usize = 32;
+
+/// The maximum number of chunks whose voxel generation can be built per frame.
+pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 30;
+/// The maximum number of chunks whose mesh can be built per frame.
+pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 5;
 
 /// Manages the loading and unloading of chunks around the player.
 pub struct ChunkManager {
@@ -20,13 +24,20 @@ pub struct ChunkManager {
     chunks: HashMap<glam::IVec2, crate::chunk::Chunk>,
     /// The meshes of the chunks that have been made.
     meshes: HashMap<glam::IVec2, MeshLoadState>,
+
+    /// A queue of chunks to load.
+    load_queue: Vec<glam::IVec2>,
+    /// A queue of chunks to build meshes for.
+    build_queue: Vec<glam::IVec2>,
 }
 
 /// Represents the state of the loaded mesh - either built and not uploaded,
 /// or built and uploaded
 #[derive(Debug)]
 enum MeshLoadState {
+    /// The mesh has been uploaded to the GPU.
     Uploaded(crate::model::Mesh),
+    /// The mesh has been built but not uploaded to the GPU.
     Todo((Vec<crate::model::MeshVertex>, Vec<u32>)),
 }
 
@@ -39,7 +50,7 @@ impl ChunkManager {
         noise.set_noise_type(NoiseType::PerlinFractal);
         noise.set_fractal_type(FractalType::FBM);
         noise.set_fractal_octaves(8);
-        noise.set_fractal_gain(0.5);
+        noise.set_fractal_gain(0.6);
         noise.set_fractal_lacunarity(2.0);
         noise.set_frequency(2.0);
 
@@ -47,6 +58,8 @@ impl ChunkManager {
             noise,
             chunks: HashMap::new(),
             meshes: HashMap::new(),
+            load_queue: Vec::new(),
+            build_queue: Vec::new(),
         }
     }
 
@@ -57,16 +70,23 @@ impl ChunkManager {
             (position.z as i32).div_euclid(CHUNK_WIDTH as i32),
         );
 
-        let queue = Self::get_chunks_around(chunk, CHUNK_LOAD_RADIUS + 1);
+        let chunks = Self::get_chunks_around(chunk, CHUNK_LOAD_RADIUS + 1);
 
-        for chunk in queue {
-            if !self.chunks.contains_key(&chunk) {
-                self.load_chunk(chunk);
-                self.build_mesh(chunk);
+        for chunk in chunks {
+            if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
+                self.load_queue.push(chunk);
+            }
+
+            if !self.build_queue.contains(&chunk) && !self.meshes.contains_key(&chunk) {
+                self.build_queue.push(chunk);
             }
         }
+
+        self.load_chunks();
+        self.build_meshes();
     }
 
+    /// Uploads any meshes that have built but not uploaded.
     pub fn resolve_mesh_uploads(&mut self, device: &Device) {
         self.meshes.values_mut().for_each(|m| match m {
             MeshLoadState::Uploaded(_) => {}
@@ -74,6 +94,44 @@ impl ChunkManager {
                 *m = MeshLoadState::Uploaded(Mesh::new(&vertices, &indices, device));
             }
         });
+    }
+
+    /// Loads upto `MAX_CHUNK_GENERATION_PER_FRAME` chunks that are currently in the load queue.
+    fn load_chunks(&mut self) {
+        let populator = SimplexPopulator::new(&self.noise);
+
+        for _ in 0..MAX_CHUNK_GENERATION_PER_FRAME {
+            let Some(position) = self.load_queue.pop() else {
+                break;
+            };
+
+            let chunk = Chunk::new(position, &populator);
+            self.chunks.insert(position, chunk);
+        }
+    }
+
+    /// Builds upto `MAX_CHUNK_MESH_GENERATION_PER_FRAME` meshes that are currently in the build
+    /// queue.
+    pub fn build_meshes(&mut self) {
+        let mut queue = Vec::new();
+
+        for _ in 0..MAX_CHUNK_MESH_GENERATION_PER_FRAME {
+            let Some(position) = self.build_queue.pop() else {
+                break;
+            };
+
+            let Some(chunk) = self.chunks.get(&position) else {
+                // put the chunk back in the queue, it's voxel data hasn't been loaded
+                queue.push(position);
+
+                continue;
+            };
+
+            let mesh = ChunkMeshBuilder::new(chunk).build();
+            self.meshes.insert(position, MeshLoadState::Todo(mesh));
+        }
+
+        self.build_queue.extend(queue);
     }
 
     /// Gets the chunks around a chunk in the provided radius.
@@ -91,9 +149,16 @@ impl ChunkManager {
         chunks
     }
 
-    fn load_chunk(&mut self, chunk: IVec2) {
-        let populator = SimplexPopulator::new(&self.noise);
-        self.chunks.insert(chunk, Chunk::new(chunk, &populator));
+    /// Returns all the meshes that have been uploaded to the GPU, and
+    /// are ready for rendering.
+    pub fn loaded_meshes(&self) -> Vec<&Mesh> {
+        self.meshes
+            .values()
+            .filter_map(|m| match m {
+                MeshLoadState::Todo(_) => None,
+                MeshLoadState::Uploaded(mesh) => Some(mesh),
+            })
+            .collect()
     }
 
     /// Returns the number of chunks currently loaded.
@@ -104,24 +169,5 @@ impl ChunkManager {
     /// Returns the number of meshes currently built.
     pub fn meshes_loaded(&self) -> usize {
         self.meshes.len()
-    }
-
-    /// Builds the mesh for the chunks around the player.
-    fn build_mesh(&mut self, chunk: IVec2) {
-        let mesh = ChunkMeshBuilder::new(
-            self.chunks
-                .get(&chunk)
-                .expect("cannot build mesh for unloaded chunk"),
-        )
-        .build();
-
-        self.meshes.insert(chunk, MeshLoadState::Todo(mesh));
-    }
-
-    pub fn loaded_meshes(&self) -> impl Iterator<Item = &Mesh> {
-        self.meshes.values().filter_map(|m| match m {
-            MeshLoadState::Todo(_) => None,
-            MeshLoadState::Uploaded(mesh) => Some(mesh),
-        })
     }
 }
