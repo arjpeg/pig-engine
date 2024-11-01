@@ -108,8 +108,8 @@ impl<'a> App<'a> {
                     ..
                 } => {
                     let PhysicalKey::Code(code) = key else {
-                            eprintln!("unknown key code, {key:?}");
-                            return Ok(());
+                        eprintln!("unknown key code, {key:?}");
+                        return Ok(());
                     };
 
                     match state {
@@ -171,8 +171,10 @@ impl<'a> App<'a> {
     fn render(&mut self) {
         let meshes = self.chunk_manager.loaded_meshes();
 
+        let fps = 1.0 / self.delta_time();
+
         match self.renderer.render(&meshes, |ui| {
-            Self::ui(ui, &self.camera, &self.chunk_manager)
+            Self::ui(ui, &self.camera, &self.chunk_manager, fps)
         }) {
             Ok(_) => {}
             // If we are out of memory, just quit the app
@@ -183,7 +185,7 @@ impl<'a> App<'a> {
     }
 
     /// Renders all egui windows.
-    fn ui(ui: &Context, camera: &Camera, chunk_manager: &ChunkManager) {
+    fn ui(ui: &Context, camera: &Camera, chunk_manager: &ChunkManager, fps: f32) {
         use egui::*;
 
         Window::new("debug").show(ui, |ui| {
@@ -191,6 +193,8 @@ impl<'a> App<'a> {
 
             ui.label(format!("chunks loaded: {}", chunk_manager.chunks_loaded()));
             ui.label(format!("meshes built: {}", chunk_manager.meshes_loaded()));
+
+            ui.label(format!("fps: {fps:0.2}"));
         });
     }
 }

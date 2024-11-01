@@ -8,10 +8,13 @@ use crate::{chunk::*, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 32;
+pub const CHUNK_LOAD_RADIUS: usize = 16;
+/// The size of the padding around loaded chunks. These padding chunks only have
+/// their voxel data generated; without their meshes being built.
+pub const CHUNK_LOAD_PADDING: usize = 3;
 
 /// The maximum number of chunks whose voxel generation can be built per frame.
-pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 20;
+pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 32;
 /// The maximum number of chunks whose mesh can be built per frame.
 pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 10;
 
@@ -56,36 +59,29 @@ impl ChunkManager {
     }
 
     /// Updates the chunk manager with the latest player position.
-    pub fn update(&mut self, position: Vec3) {
-        let chunk = ivec2(
-            (position.x as i32).div_euclid(CHUNK_WIDTH as i32),
-            (position.z as i32).div_euclid(CHUNK_WIDTH as i32),
+    pub fn update(&mut self, player_position: Vec3) {
+        let player_chunk = ivec2(
+            (player_position.x as i32).div_euclid(CHUNK_WIDTH as i32),
+            (player_position.z as i32).div_euclid(CHUNK_WIDTH as i32),
         );
 
-        // generate voxel data for padding chunks, should be higher in priority than building the
-        // mesh for other chunks
-        for z in [-3, 3] {
-            for x in [-3, 3] {
-                let chunk = ivec2(
-                    chunk.x + x * CHUNK_LOAD_RADIUS as i32,
-                    chunk.y + z * CHUNK_LOAD_RADIUS as i32,
-                );
+        let mut neighbors =
+            Self::get_chunks_around(player_chunk, CHUNK_LOAD_RADIUS + CHUNK_LOAD_PADDING);
+        neighbors.sort_by_key(|chunk| -player_chunk.distance_squared(*chunk));
 
-                if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
-                    self.load_queue.push_back(chunk);
-                }
-            }
-        }
-
-        let chunks = Self::get_chunks_around(chunk, CHUNK_LOAD_RADIUS);
-
-        for chunk in chunks {
-            if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
-                self.load_queue.push_back(chunk);
+        for neighbor in neighbors {
+            if !self.load_queue.contains(&neighbor) && !self.chunks.contains_key(&neighbor) {
+                self.load_queue.push_back(neighbor);
             }
 
-            if !self.build_queue.contains(&chunk) && !self.meshes.contains_key(&chunk) {
-                self.build_queue.push_back(chunk);
+            if (player_chunk.x - neighbor.x).unsigned_abs() > CHUNK_LOAD_RADIUS as u32
+                || (player_chunk.y - neighbor.y).unsigned_abs() > CHUNK_LOAD_RADIUS as u32
+            {
+                continue;
+            }
+
+            if !self.build_queue.contains(&neighbor) && !self.meshes.contains_key(&neighbor) {
+                self.build_queue.push_back(neighbor);
             }
         }
 
