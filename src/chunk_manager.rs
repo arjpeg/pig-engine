@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
-use bracket_noise::prelude::*;
 use glam::{ivec2, IVec2, Vec3};
+use noise::Perlin;
 use wgpu::Device;
 
 use crate::{chunk::*, model::*};
@@ -18,7 +18,7 @@ pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 15;
 /// Manages the loading and unloading of chunks around the player.
 pub struct ChunkManager {
     /// The noise generator used to generate terrain, etc.
-    noise: bracket_noise::prelude::FastNoise,
+    generator: ChunkGenerator,
 
     /// The chunks that are currently loaded.
     chunks: HashMap<glam::IVec2, crate::chunk::Chunk>,
@@ -26,9 +26,9 @@ pub struct ChunkManager {
     meshes: HashMap<glam::IVec2, MeshLoadState>,
 
     /// A queue of chunks to load.
-    load_queue: Vec<glam::IVec2>,
+    load_queue: VecDeque<glam::IVec2>,
     /// A queue of chunks to build meshes for.
-    build_queue: Vec<glam::IVec2>,
+    build_queue: VecDeque<glam::IVec2>,
 }
 
 /// Represents the state of the loaded mesh - either built and not uploaded,
@@ -44,24 +44,14 @@ enum MeshLoadState {
 impl ChunkManager {
     /// Creates a new chunk manager.
     pub fn new() -> Self {
-        let seed = 30;
-        let mut noise = FastNoise::seeded(seed);
-
-        noise.set_noise_type(NoiseType::PerlinFractal);
-        noise.set_fractal_type(FractalType::FBM);
-
-        noise.set_fractal_octaves(8);
-        noise.set_fractal_gain(0.6);
-        noise.set_fractal_lacunarity(2.0);
-
-        noise.set_frequency(2.0);
+        let noise = Perlin::new(1);
 
         Self {
-            noise,
+            generator: ChunkGenerator::Noise(noise),
             chunks: HashMap::new(),
             meshes: HashMap::new(),
-            load_queue: Vec::new(),
-            build_queue: Vec::new(),
+            load_queue: VecDeque::new(),
+            build_queue: VecDeque::new(),
         }
     }
 
@@ -76,11 +66,11 @@ impl ChunkManager {
 
         for chunk in chunks {
             if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
-                self.load_queue.push(chunk);
+                self.load_queue.push_back(chunk);
             }
 
             if !self.build_queue.contains(&chunk) && !self.meshes.contains_key(&chunk) {
-                self.build_queue.push(chunk);
+                self.build_queue.push_back(chunk);
             }
         }
 
@@ -93,7 +83,7 @@ impl ChunkManager {
                 );
 
                 if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
-                    self.load_queue.push(chunk);
+                    self.load_queue.push_back(chunk);
                 }
             }
         }
@@ -115,12 +105,12 @@ impl ChunkManager {
     /// Loads upto `MAX_CHUNK_GENERATION_PER_FRAME` chunks that are currently in the load queue.
     fn load_chunks(&mut self) {
         for _ in 0..MAX_CHUNK_GENERATION_PER_FRAME {
-            let Some(position) = self.load_queue.pop() else {
+            let Some(position) = self.load_queue.pop_front() else {
                 break;
             };
 
             let mut chunk = Chunk::new(position);
-            chunk.generate(ChunkGenerator::Flat);
+            chunk.generate(&self.generator);
 
             self.chunks.insert(position, chunk);
         }
@@ -132,7 +122,7 @@ impl ChunkManager {
         let mut queue = Vec::new();
 
         for _ in 0..MAX_CHUNK_MESH_GENERATION_PER_FRAME {
-            let Some(position) = self.build_queue.pop() else {
+            let Some(position) = self.build_queue.pop_front() else {
                 break;
             };
 

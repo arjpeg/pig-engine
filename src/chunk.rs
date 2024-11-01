@@ -2,6 +2,7 @@ use std::{isize, str::FromStr};
 
 use anyhow::bail;
 use glam::*;
+use noise::{NoiseFn, Perlin};
 
 /// The width of a chunk (xz length).
 pub const CHUNK_WIDTH: usize = 16;
@@ -36,7 +37,7 @@ pub enum ChunkGenerator {
     /// A generator that generates a flat world.
     Flat,
     /// A generator that generates a world with some noise.
-    Noise(),
+    Noise(noise::Perlin),
 }
 
 impl Chunk {
@@ -48,7 +49,7 @@ impl Chunk {
     }
 
     /// Fills the chunk with voxels using the provided generator.
-    pub fn generate(&mut self, generator: ChunkGenerator) {
+    pub fn generate(&mut self, generator: &ChunkGenerator) {
         generator.generate(self);
     }
 
@@ -115,7 +116,7 @@ impl ChunkGenerator {
     pub fn generate(&self, chunk: &mut Chunk) {
         match self {
             Self::Flat => self.apply_flat(chunk),
-            _ => todo!(),
+            Self::Noise(noise) => self.apply_perlin(chunk, noise),
         }
     }
 
@@ -130,6 +131,23 @@ impl ChunkGenerator {
                     };
 
                     chunk.voxels[y][z][x] = voxel;
+                }
+            }
+        }
+    }
+
+    fn apply_perlin(&self, chunk: &mut Chunk, noise: &Perlin) {
+        for z in 0..CHUNK_WIDTH {
+            for x in 0..CHUNK_WIDTH {
+                let filled = (noise.get([
+                    (x as f64 + (CHUNK_WIDTH as f64 * chunk.position.x as f64)) / 250.0,
+                    (z as f64 + (CHUNK_WIDTH as f64 * chunk.position.y as f64)) / 250.0,
+                ]) + 1.0)
+                    * 0.5
+                    * CHUNK_HEIGHT as f64;
+
+                for y in 0..(filled as usize + 1).min(CHUNK_HEIGHT - 1) {
+                    chunk.voxels[y][z][x] = Voxel::Grass
                 }
             }
         }
