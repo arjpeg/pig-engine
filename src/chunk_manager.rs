@@ -8,17 +8,17 @@ use crate::{chunk::*, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 16;
+pub const CHUNK_LOAD_RADIUS: usize = 32;
 
 /// The maximum number of chunks whose voxel generation can be built per frame.
-pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 15;
+pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 5;
 /// The maximum number of chunks whose mesh can be built per frame.
-pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 15;
+pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 5;
 
 /// Manages the loading and unloading of chunks around the player.
 pub struct ChunkManager {
     /// The noise generator used to generate terrain, etc.
-    generator: ChunkGenerator,
+    noise: Perlin,
 
     /// The chunks that are currently loaded.
     chunks: HashMap<glam::IVec2, crate::chunk::Chunk>,
@@ -47,7 +47,7 @@ impl ChunkManager {
         let noise = Perlin::new(1);
 
         Self {
-            generator: ChunkGenerator::Noise(noise),
+            noise,
             chunks: HashMap::new(),
             meshes: HashMap::new(),
             load_queue: VecDeque::new(),
@@ -110,7 +110,7 @@ impl ChunkManager {
             };
 
             let mut chunk = Chunk::new(position);
-            chunk.generate(&self.generator);
+            chunk.fill_perlin(&self.noise);
 
             self.chunks.insert(position, chunk);
         }

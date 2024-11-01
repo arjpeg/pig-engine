@@ -2,12 +2,15 @@ use std::{isize, str::FromStr};
 
 use anyhow::bail;
 use glam::*;
-use noise::{NoiseFn, Perlin};
+use noise::NoiseFn;
 
 /// The width of a chunk (xz length).
 pub const CHUNK_WIDTH: usize = 16;
 /// The height of a chunk (y length).
 pub const CHUNK_HEIGHT: usize = 128;
+
+/// The scale factor used to sample noise values for chunk generation.
+pub const NOISE_SCALE: f32 = 1.0 / 250.0;
 
 /// A 3d grid of voxels.
 pub type VoxelGrid = [[[Voxel; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT];
@@ -31,26 +34,12 @@ pub struct Chunk {
     pub position: glam::IVec2,
 }
 
-/// A generator for populating the voxels of a chunk.
-#[derive(Debug)]
-pub enum ChunkGenerator {
-    /// A generator that generates a flat world.
-    Flat,
-    /// A generator that generates a world with some noise.
-    Noise(noise::Perlin),
-}
-
 impl Chunk {
     /// Creates a new chunk at the given position.
     pub fn new(position: IVec2) -> Self {
         let voxels = Box::new([[[Voxel::Air; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT]);
 
         Self { voxels, position }
-    }
-
-    /// Fills the chunk with voxels using the provided generator.
-    pub fn generate(&mut self, generator: &ChunkGenerator) {
-        generator.generate(self);
     }
 
     /// Returns whether the provided position is in the confines of the chunk,
@@ -110,44 +99,22 @@ impl Chunk {
             Some([x as usize, y as usize, z as usize])
         }
     }
-}
 
-impl ChunkGenerator {
-    pub fn generate(&self, chunk: &mut Chunk) {
-        match self {
-            Self::Flat => self.apply_flat(chunk),
-            Self::Noise(noise) => self.apply_perlin(chunk, noise),
-        }
-    }
+    /// Fills the chunk in using noise values.
+    pub fn fill_perlin(&mut self, noise: impl NoiseFn<f64, 2>) {
+        let global_position = (self.position * CHUNK_WIDTH as i32).as_vec2();
 
-    fn apply_flat(&self, chunk: &mut Chunk) {
-        for y in 0..CHUNK_HEIGHT {
-            for z in 0..CHUNK_WIDTH {
-                for x in 0..CHUNK_WIDTH {
-                    let voxel = match y {
-                        0..10 => Voxel::Dirt,
-                        10..11 => Voxel::Grass,
-                        _ => continue,
-                    };
-
-                    chunk.voxels[y][z][x] = voxel;
-                }
-            }
-        }
-    }
-
-    fn apply_perlin(&self, chunk: &mut Chunk, noise: &Perlin) {
         for z in 0..CHUNK_WIDTH {
             for x in 0..CHUNK_WIDTH {
-                let filled = (noise.get([
-                    (x as f64 + (CHUNK_WIDTH as f64 * chunk.position.x as f64)) / 250.0,
-                    (z as f64 + (CHUNK_WIDTH as f64 * chunk.position.y as f64)) / 250.0,
-                ]) + 1.0)
+                let local_position = vec2(x as f32, z as f32);
+                let true_position = (global_position + local_position) * NOISE_SCALE;
+
+                let filled = (noise.get(true_position.as_dvec2().to_array()) + 1.0)
                     * 0.5
                     * CHUNK_HEIGHT as f64;
 
                 for y in 0..(filled as usize + 1).min(CHUNK_HEIGHT - 1) {
-                    chunk.voxels[y][z][x] = Voxel::Grass
+                    self.voxels[y][z][x] = Voxel::Grass
                 }
             }
         }
