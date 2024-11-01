@@ -11,9 +11,9 @@ use crate::{chunk::*, model::*};
 pub const CHUNK_LOAD_RADIUS: usize = 32;
 
 /// The maximum number of chunks whose voxel generation can be built per frame.
-pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 5;
+pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 20;
 /// The maximum number of chunks whose mesh can be built per frame.
-pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 5;
+pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 10;
 
 /// Manages the loading and unloading of chunks around the player.
 pub struct ChunkManager {
@@ -62,19 +62,8 @@ impl ChunkManager {
             (position.z as i32).div_euclid(CHUNK_WIDTH as i32),
         );
 
-        let chunks = Self::get_chunks_around(chunk, CHUNK_LOAD_RADIUS);
-
-        for chunk in chunks {
-            if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
-                self.load_queue.push_back(chunk);
-            }
-
-            if !self.build_queue.contains(&chunk) && !self.meshes.contains_key(&chunk) {
-                self.build_queue.push_back(chunk);
-            }
-        }
-
-        // generate voxel data for padding chunks
+        // generate voxel data for padding chunks, should be higher in priority than building the
+        // mesh for other chunks
         for z in [-3, 3] {
             for x in [-3, 3] {
                 let chunk = ivec2(
@@ -85,6 +74,18 @@ impl ChunkManager {
                 if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
                     self.load_queue.push_back(chunk);
                 }
+            }
+        }
+
+        let chunks = Self::get_chunks_around(chunk, CHUNK_LOAD_RADIUS);
+
+        for chunk in chunks {
+            if !self.load_queue.contains(&chunk) && !self.chunks.contains_key(&chunk) {
+                self.load_queue.push_back(chunk);
+            }
+
+            if !self.build_queue.contains(&chunk) && !self.meshes.contains_key(&chunk) {
+                self.build_queue.push_back(chunk);
             }
         }
 
