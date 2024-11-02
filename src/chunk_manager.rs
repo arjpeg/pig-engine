@@ -8,10 +8,10 @@ use crate::{chunk::*, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 16;
+pub const CHUNK_LOAD_RADIUS: usize = 8;
 /// The size of the padding around loaded chunks. These padding chunks only have
 /// their voxel data generated; without their meshes being built.
-pub const CHUNK_LOAD_PADDING: usize = 3;
+pub const CHUNK_LOAD_PADDING: usize = 2;
 
 /// The maximum number of chunks whose voxel generation can be built per frame.
 pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 32;
@@ -67,7 +67,13 @@ impl ChunkManager {
 
         let mut neighbors =
             Self::get_chunks_around(player_chunk, CHUNK_LOAD_RADIUS + CHUNK_LOAD_PADDING);
-        neighbors.sort_by_key(|chunk| -player_chunk.distance_squared(*chunk));
+        neighbors.sort_by_key(|chunk| {
+            let is_outside_radius = (player_chunk.x - chunk.x).unsigned_abs()
+                > CHUNK_LOAD_RADIUS as u32
+                || (player_chunk.y - chunk.y).unsigned_abs() > CHUNK_LOAD_RADIUS as u32;
+
+            (is_outside_radius, player_chunk.distance_squared(*chunk))
+        });
 
         for neighbor in neighbors {
             if !self.load_queue.contains(&neighbor) && !self.chunks.contains_key(&neighbor) {

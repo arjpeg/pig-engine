@@ -7,10 +7,17 @@ use noise::NoiseFn;
 /// The width of a chunk (xz length).
 pub const CHUNK_WIDTH: usize = 16;
 /// The height of a chunk (y length).
-pub const CHUNK_HEIGHT: usize = 128;
+pub const CHUNK_HEIGHT: usize = 256;
 
 /// The scale factor used to sample noise values for chunk generation.
-pub const NOISE_SCALE: f32 = 1.0 / 250.0;
+pub const NOISE_SCALE: f64 = 1.0 / 500.0;
+/// The rate at which the frequency of the noise increases with each octave.
+pub const LACUNARITY: f64 = 2.0;
+/// The rate at which the amplitude of the nosie decreases with each ocatve.
+pub const PERSISTENCE: f64 = 0.45;
+
+/// The number of octaves used for noise generation.
+pub const NUM_OCTAVES: usize = 8;
 
 /// A 3d grid of voxels.
 pub type VoxelGrid = [[[Voxel; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT];
@@ -107,13 +114,25 @@ impl Chunk {
         for z in 0..CHUNK_WIDTH {
             for x in 0..CHUNK_WIDTH {
                 let local_position = vec2(x as f32, z as f32);
-                let true_position = (global_position + local_position) * NOISE_SCALE;
+                let base_position = (global_position + local_position).as_dvec2() * NOISE_SCALE;
 
-                let filled = (noise.get(true_position.as_dvec2().to_array()) + 1.0)
-                    * 0.5
-                    * CHUNK_HEIGHT as f64;
+                let mut height = 0.0;
+                let mut frequency = 1.0;
+                let mut amplitude = 1.0;
 
-                for y in 0..(filled as usize + 1).min(CHUNK_HEIGHT - 1) {
+                for _ in 0..NUM_OCTAVES {
+                    let sampled_position = base_position * frequency;
+                    let sample = noise.get(sampled_position.to_array());
+
+                    height += (sample + 1.0) / 2.0 * amplitude * CHUNK_HEIGHT as f64;
+
+                    frequency *= LACUNARITY;
+                    amplitude *= PERSISTENCE;
+                }
+
+                height /= 2.0;
+
+                for y in 0..(height as usize + 1).min(CHUNK_HEIGHT - 1) {
                     self.voxels[y][z][x] = Voxel::Grass
                 }
             }
