@@ -8,7 +8,7 @@ use crate::{chunk::*, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 8;
+pub const CHUNK_LOAD_RADIUS: usize = 16;
 /// The size of the padding around loaded chunks. These padding chunks only have
 /// their voxel data generated; without their meshes being built.
 pub const CHUNK_LOAD_PADDING: usize = 2;
@@ -66,23 +66,35 @@ impl ChunkManager {
         );
 
         let mut neighbors =
-            Self::get_chunks_around(player_chunk, CHUNK_LOAD_RADIUS + CHUNK_LOAD_PADDING);
-        neighbors.sort_by_key(|chunk| {
-            let is_outside_radius = (player_chunk.x - chunk.x).unsigned_abs()
-                > CHUNK_LOAD_RADIUS as u32
-                || (player_chunk.y - chunk.y).unsigned_abs() > CHUNK_LOAD_RADIUS as u32;
+            Self::get_chunks_around(player_chunk, CHUNK_LOAD_RADIUS + CHUNK_LOAD_PADDING)
+                .map(|chunk| {
+                    let distance = (player_chunk.x - chunk.x)
+                        .abs()
+                        .max((player_chunk.y - chunk.y).abs())
+                        as f32;
+                    (chunk, distance)
+                })
+                .collect::<Vec<_>>();
 
-            (is_outside_radius, player_chunk.distance_squared(*chunk))
+        // Sort: prioritize inside-radius chunks, and within each group, sort by ascending distance
+        neighbors.sort_by(|(_, dist_a), (_, dist_b)| {
+            let a_inside = *dist_a <= CHUNK_LOAD_RADIUS as f32;
+            let b_inside = *dist_b <= CHUNK_LOAD_RADIUS as f32;
+
+            // Inside chunks first, then by distance ascending
+            b_inside.cmp(&a_inside).then_with(|| {
+                dist_a
+                    .partial_cmp(dist_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
         });
 
-        for neighbor in neighbors {
+        for (neighbor, distance) in neighbors {
             if !self.load_queue.contains(&neighbor) && !self.chunks.contains_key(&neighbor) {
                 self.load_queue.push_back(neighbor);
             }
 
-            if (player_chunk.x - neighbor.x).unsigned_abs() > CHUNK_LOAD_RADIUS as u32
-                || (player_chunk.y - neighbor.y).unsigned_abs() > CHUNK_LOAD_RADIUS as u32
-            {
+            if distance > CHUNK_LOAD_RADIUS as f32 {
                 continue;
             }
 
@@ -143,18 +155,11 @@ impl ChunkManager {
     }
 
     /// Gets the chunks around a chunk in the provided radius.
-    fn get_chunks_around(position: IVec2, radius: usize) -> Vec<IVec2> {
-        let mut positions = Vec::with_capacity(radius * radius);
-
+    fn get_chunks_around(position: IVec2, radius: usize) -> impl Iterator<Item = IVec2> {
         let radius = radius as i32;
 
-        for x in -radius..=radius {
-            for z in -radius..=radius {
-                positions.push(position + ivec2(x, z));
-            }
-        }
-
-        positions
+        (-radius..=radius)
+            .flat_map(move |x| (-radius..=radius).map(move |z| position + ivec2(x, z)))
     }
 
     /// Returns all the meshes that have been uploaded to the GPU, and

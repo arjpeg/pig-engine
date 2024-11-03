@@ -14,7 +14,7 @@ pub const NOISE_SCALE: f64 = 1.0 / 500.0;
 /// The rate at which the frequency of the noise increases with each octave.
 pub const LACUNARITY: f64 = 2.0;
 /// The rate at which the amplitude of the nosie decreases with each ocatve.
-pub const PERSISTENCE: f64 = 0.45;
+pub const PERSISTENCE: f64 = 0.425;
 
 /// The number of octaves used for noise generation.
 pub const NUM_OCTAVES: usize = 8;
