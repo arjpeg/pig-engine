@@ -194,7 +194,7 @@ impl<'a> App<'a> {
             ui.label(format!("chunks loaded: {}", chunk_manager.chunks_loaded()));
             ui.label(format!("meshes built: {}", chunk_manager.meshes_loaded()));
 
-            ui.label(format!("fps: {fps:0.2}"));
+            ui.label(format!("fps: {}", (fps as u32 / 10) * 10));
         });
     }
 }

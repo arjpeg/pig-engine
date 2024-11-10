@@ -1,4 +1,4 @@
-use std::{isize, str::FromStr};
+use std::str::FromStr;
 
 use anyhow::bail;
 use glam::*;
@@ -12,7 +12,7 @@ pub const CHUNK_HEIGHT: usize = 256;
 /// The scale factor used to sample noise values for chunk generation.
 pub const NOISE_SCALE: f64 = 1.0 / 500.0;
 /// The rate at which the frequency of the noise increases with each octave.
-pub const LACUNARITY: f64 = 2.0;
+pub const LACUNARITY: f64 = 2.05;
 /// The rate at which the amplitude of the nosie decreases with each ocatve.
 pub const PERSISTENCE: f64 = 0.425;
 
@@ -29,6 +29,8 @@ pub enum Voxel {
     Air,
     Grass,
     Dirt,
+    Stone,
+    Snow,
 }
 
 /// A collection of voxels grouped within a AABB rectangle to increase performance
@@ -116,27 +118,39 @@ impl Chunk {
                 let local_position = vec2(x as f32, z as f32);
                 let base_position = (global_position + local_position).as_dvec2() * NOISE_SCALE;
 
-                let mut height = 0.0;
-                let mut frequency = 1.0;
-                let mut amplitude = 1.0;
+                let height = (self.get_voxel(&noise, base_position) as usize).min(CHUNK_HEIGHT - 1);
 
-                for _ in 0..NUM_OCTAVES {
-                    let sampled_position = base_position * frequency;
-                    let sample = noise.get(sampled_position.to_array());
-
-                    height += (sample + 1.0) / 2.0 * amplitude * CHUNK_HEIGHT as f64;
-
-                    frequency *= LACUNARITY;
-                    amplitude *= PERSISTENCE;
-                }
-
-                height /= 2.0;
-
-                for y in 0..(height as usize + 1).min(CHUNK_HEIGHT - 1) {
-                    self.voxels[y][z][x] = Voxel::Grass
+                for y in 0..=height {
+                    self.voxels[y][z][x] = match y {
+                        200..=CHUNK_HEIGHT => Voxel::Snow,
+                        150.. => Voxel::Stone,
+                        _ if y == height => Voxel::Grass,
+                        _ => Voxel::Dirt,
+                    };
                 }
             }
         }
+    }
+
+    /// Gets the appropriate voxel type for a given position using noise.
+    fn get_voxel(&self, noise: &impl NoiseFn<f64, 2>, position: DVec2) -> f64 {
+        let mut height = 0.0;
+        let mut frequency = 1.0;
+        let mut amplitude = 1.0;
+
+        for _ in 0..NUM_OCTAVES {
+            let sampled_position = position * frequency;
+            let sample = noise.get(sampled_position.to_array());
+
+            height += (sample + 1.0) / 2.0 * amplitude * CHUNK_HEIGHT as f64;
+
+            frequency *= LACUNARITY;
+            amplitude *= PERSISTENCE;
+        }
+
+        height /= 2.0;
+
+        height
     }
 }
 
@@ -148,6 +162,8 @@ impl FromStr for Voxel {
             "air" => Ok(Self::Air),
             "grass" => Ok(Self::Grass),
             "dirt" => Ok(Self::Dirt),
+            "stone" => Ok(Self::Stone),
+            "snow" => Ok(Self::Snow),
             _ => bail!("unkown voxel type, '{s}'"),
         }
     }

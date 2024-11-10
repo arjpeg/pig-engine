@@ -11,7 +11,7 @@ use crate::{chunk::*, model::*};
 pub const CHUNK_LOAD_RADIUS: usize = 16;
 /// The size of the padding around loaded chunks. These padding chunks only have
 /// their voxel data generated; without their meshes being built.
-pub const CHUNK_LOAD_PADDING: usize = 2;
+pub const CHUNK_LOAD_PADDING: usize = 1;
 
 /// The maximum number of chunks whose voxel generation can be built per frame.
 pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 32;
@@ -24,7 +24,7 @@ pub struct ChunkManager {
     noise: Perlin,
 
     /// The chunks that are currently loaded.
-    chunks: HashMap<glam::IVec2, crate::chunk::Chunk>,
+    chunks: HashMap<glam::IVec2, Chunk>,
     /// The meshes of the chunks that have been made.
     meshes: HashMap<glam::IVec2, MeshLoadState>,
 
@@ -39,9 +39,9 @@ pub struct ChunkManager {
 #[derive(Debug)]
 enum MeshLoadState {
     /// The mesh has been uploaded to the GPU.
-    Uploaded(crate::model::Mesh),
+    Uploaded(Mesh),
     /// The mesh has been built but not uploaded to the GPU.
-    Todo((Vec<crate::model::MeshVertex>, Vec<u32>)),
+    Todo((Vec<MeshVertex>, Vec<u32>)),
 }
 
 impl ChunkManager {
@@ -68,25 +68,24 @@ impl ChunkManager {
         let mut neighbors =
             Self::get_chunks_around(player_chunk, CHUNK_LOAD_RADIUS + CHUNK_LOAD_PADDING)
                 .map(|chunk| {
+                    // the manhattan distance between this chunk and the player
                     let distance = (player_chunk.x - chunk.x)
                         .abs()
                         .max((player_chunk.y - chunk.y).abs())
-                        as f32;
+                        as usize;
+
                     (chunk, distance)
                 })
                 .collect::<Vec<_>>();
 
-        // Sort: prioritize inside-radius chunks, and within each group, sort by ascending distance
+        // prioritize "padding" chunks (i.e. chunks outside the load-radius), then sort from
+        // closest to the player
         neighbors.sort_by(|(_, dist_a), (_, dist_b)| {
-            let a_inside = *dist_a <= CHUNK_LOAD_RADIUS as f32;
-            let b_inside = *dist_b <= CHUNK_LOAD_RADIUS as f32;
+            let a_inside = *dist_a <= CHUNK_LOAD_RADIUS;
+            let b_inside = *dist_b <= CHUNK_LOAD_RADIUS;
 
             // Inside chunks first, then by distance ascending
-            b_inside.cmp(&a_inside).then_with(|| {
-                dist_a
-                    .partial_cmp(dist_b)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+            b_inside.cmp(&a_inside).then_with(|| dist_a.cmp(dist_b))
         });
 
         for (neighbor, distance) in neighbors {
@@ -94,7 +93,7 @@ impl ChunkManager {
                 self.load_queue.push_back(neighbor);
             }
 
-            if distance > CHUNK_LOAD_RADIUS as f32 {
+            if distance > CHUNK_LOAD_RADIUS {
                 continue;
             }
 
@@ -125,7 +124,7 @@ impl ChunkManager {
             };
 
             let mut chunk = Chunk::new(position);
-            chunk.fill_perlin(&self.noise);
+            chunk.fill_perlin(self.noise);
 
             self.chunks.insert(position, chunk);
         }
