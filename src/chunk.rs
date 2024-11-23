@@ -13,8 +13,6 @@ pub const CHUNK_HEIGHT: usize = 256;
 pub const NOISE_SCALE: f64 = 1.0 / 500.0;
 /// The rate at which the frequency of the noise increases with each octave.
 pub const LACUNARITY: f64 = 2.05;
-/// The rate at which the amplitude of the nosie decreases with each ocatve.
-pub const PERSISTENCE: f64 = 0.425;
 
 /// The number of octaves used for noise generation.
 pub const NUM_OCTAVES: usize = 8;
@@ -31,6 +29,32 @@ pub enum Voxel {
     Dirt,
     Stone,
     Snow,
+}
+
+/// Creates a noise function that can be used to create interesting terrain.
+pub fn create_noise_generator(seed: u32) -> impl NoiseFn<f64, 2> {
+    use noise::*;
+
+    const SEA_LEVEL: f64 = 0.0;
+
+    let continents = Fbm::<Perlin>::new(seed)
+        .set_frequency(0.2)
+        .set_octaves(NUM_OCTAVES)
+        .set_lacunarity(LACUNARITY);
+
+    let mountain_ranges_curuve = Curve::new(continents)
+        .add_control_point(-2.0 + SEA_LEVEL, -1.625 + SEA_LEVEL)
+        .add_control_point(-1.0 + SEA_LEVEL, -1.375 + SEA_LEVEL)
+        .add_control_point(SEA_LEVEL, -0.375 + SEA_LEVEL)
+        .add_control_point(0.0625 + SEA_LEVEL, 0.125 + SEA_LEVEL)
+        .add_control_point(0.125 + SEA_LEVEL, 0.25 + SEA_LEVEL)
+        .add_control_point(0.25 + SEA_LEVEL, 1.0 + SEA_LEVEL)
+        .add_control_point(0.5 + SEA_LEVEL, 0.25 + SEA_LEVEL)
+        .add_control_point(0.75 + SEA_LEVEL, 0.25 + SEA_LEVEL)
+        .add_control_point(1.0 + SEA_LEVEL, 0.5 + SEA_LEVEL)
+        .add_control_point(2.0 + SEA_LEVEL, 0.5 + SEA_LEVEL);
+
+    mountain_ranges_curuve
 }
 
 /// A collection of voxels grouped within a AABB rectangle to increase performance
@@ -116,9 +140,11 @@ impl Chunk {
         for z in 0..CHUNK_WIDTH {
             for x in 0..CHUNK_WIDTH {
                 let local_position = vec2(x as f32, z as f32);
-                let base_position = (global_position + local_position).as_dvec2() * NOISE_SCALE;
+                let position = (global_position + local_position).as_dvec2() * NOISE_SCALE;
 
-                let height = (self.get_voxel(&noise, base_position) as usize).min(CHUNK_HEIGHT - 1);
+                //let height = (self.get_voxel(&noise, base_position) as usize).min(CHUNK_HEIGHT - 1);
+                let height = (noise.get(position.to_array()) + 1.0) / 2.0 * CHUNK_HEIGHT as f64;
+                let height = height.min(CHUNK_HEIGHT as f64 - 2.0) as usize;
 
                 for y in 0..=height {
                     self.voxels[y][z][x] = match y {
@@ -130,27 +156,6 @@ impl Chunk {
                 }
             }
         }
-    }
-
-    /// Gets the appropriate voxel type for a given position using noise.
-    fn get_voxel(&self, noise: &impl NoiseFn<f64, 2>, position: DVec2) -> f64 {
-        let mut height = 0.0;
-        let mut frequency = 1.0;
-        let mut amplitude = 1.0;
-
-        for _ in 0..NUM_OCTAVES {
-            let sampled_position = position * frequency;
-            let sample = noise.get(sampled_position.to_array());
-
-            height += (sample + 1.0) / 2.0 * amplitude * CHUNK_HEIGHT as f64;
-
-            frequency *= LACUNARITY;
-            amplitude *= PERSISTENCE;
-        }
-
-        height /= 2.0;
-
-        height
     }
 }
 

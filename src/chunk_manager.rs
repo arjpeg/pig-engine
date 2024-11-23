@@ -1,14 +1,14 @@
 use std::collections::{HashMap, VecDeque};
 
 use glam::{ivec2, IVec2, Vec3};
-use noise::Perlin;
+use noise::NoiseFn;
 use wgpu::Device;
 
 use crate::{chunk::*, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 16;
+pub const CHUNK_LOAD_RADIUS: usize = 32;
 /// The size of the padding around loaded chunks. These padding chunks only have
 /// their voxel data generated; without their meshes being built.
 pub const CHUNK_LOAD_PADDING: usize = 1;
@@ -21,7 +21,7 @@ pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 10;
 /// Manages the loading and unloading of chunks around the player.
 pub struct ChunkManager {
     /// The noise generator used to generate terrain, etc.
-    noise: Perlin,
+    noise: Box<dyn NoiseFn<f64, 2>>,
 
     /// The chunks that are currently loaded.
     chunks: HashMap<glam::IVec2, Chunk>,
@@ -47,7 +47,7 @@ enum MeshLoadState {
 impl ChunkManager {
     /// Creates a new chunk manager.
     pub fn new() -> Self {
-        let noise = Perlin::new(1);
+        let noise = Box::new(create_noise_generator(0));
 
         Self {
             noise,
@@ -124,7 +124,7 @@ impl ChunkManager {
             };
 
             let mut chunk = Chunk::new(position);
-            chunk.fill_perlin(self.noise);
+            chunk.fill_perlin(&self.noise);
 
             self.chunks.insert(position, chunk);
         }
