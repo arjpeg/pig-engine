@@ -1643,6 +1643,7 @@ dependencies = [
  "image",
  "noise",
  "pollster",
+ "rayon",
  "regex",
  "tobj",
  "wgpu",

@@ -1,7 +1,11 @@
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    sync::mpsc,
+};
 
 use glam::{ivec2, IVec2, Vec3};
 use noise::NoiseFn;
+use rayon::ThreadPoolBuilder;
 use wgpu::Device;
 
 use crate::{chunk::*, model::*};
@@ -15,13 +19,11 @@ pub const CHUNK_LOAD_PADDING: usize = 1;
 
 /// The maximum number of chunks whose voxel generation can be built per frame.
 pub const MAX_CHUNK_GENERATION_PER_FRAME: usize = 32;
-/// The maximum number of chunks whose mesh can be built per frame.
-pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 10;
 
 /// Manages the loading and unloading of chunks around the player.
 pub struct ChunkManager {
     /// The noise generator used to generate terrain, etc.
-    noise: Box<dyn NoiseFn<f64, 2>>,
+    noise: Box<dyn NoiseFn<f64, 2> + Send + Sync>,
 
     /// The chunks that are currently loaded.
     chunks: HashMap<glam::IVec2, Chunk>,
@@ -31,7 +33,14 @@ pub struct ChunkManager {
     /// A queue of chunks to load.
     load_queue: VecDeque<glam::IVec2>,
     /// A queue of chunks to build meshes for.
-    build_queue: VecDeque<glam::IVec2>,
+    build_queue: HashSet<glam::IVec2>,
+
+    /// A thread pool to manage chunks meshes to be built.
+    mesh_thread_pool: rayon::ThreadPool,
+    /// The producer end of the `std::sync::mpsc::channel` to communicate with workers.
+    tx: std::sync::mpsc::Sender<(glam::IVec2, MeshLoadState)>,
+    /// The consumer end of the `std::sync::mpsc::channel` to communicate with workers.
+    rx: std::sync::mpsc::Receiver<(glam::IVec2, MeshLoadState)>,
 }
 
 /// Represents the state of the loaded mesh - either built and not uploaded,
@@ -49,12 +58,22 @@ impl ChunkManager {
     pub fn new() -> Self {
         let noise = Box::new(create_noise_generator(0));
 
+        let thread_pool = ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .expect("could not create mesh builder thrad pool");
+
+        let (tx, rx) = mpsc::channel();
+
         Self {
             noise,
+            mesh_thread_pool: thread_pool,
+            tx,
+            rx,
             chunks: HashMap::new(),
             meshes: HashMap::new(),
             load_queue: VecDeque::new(),
-            build_queue: VecDeque::new(),
+            build_queue: HashSet::new(),
         }
     }
 
@@ -89,7 +108,7 @@ impl ChunkManager {
         });
 
         for (neighbor, distance) in neighbors {
-            if !self.load_queue.contains(&neighbor) && !self.chunks.contains_key(&neighbor) {
+            if !self.chunks.contains_key(&neighbor) {
                 self.load_queue.push_back(neighbor);
             }
 
@@ -97,8 +116,8 @@ impl ChunkManager {
                 continue;
             }
 
-            if !self.build_queue.contains(&neighbor) && !self.meshes.contains_key(&neighbor) {
-                self.build_queue.push_back(neighbor);
+            if !self.meshes.contains_key(&neighbor) {
+                self.build_queue.insert(neighbor);
             }
         }
 
@@ -120,11 +139,11 @@ impl ChunkManager {
     fn load_chunks(&mut self) {
         for _ in 0..MAX_CHUNK_GENERATION_PER_FRAME {
             let Some(position) = self.load_queue.pop_front() else {
-                break;
+                return;
             };
 
             let mut chunk = Chunk::new(position);
-            chunk.fill_perlin(&self.noise);
+            chunk.fill_perlin(&*self.noise);
 
             self.chunks.insert(position, chunk);
         }
@@ -133,24 +152,24 @@ impl ChunkManager {
     /// Builds upto `MAX_CHUNK_MESH_GENERATION_PER_FRAME` meshes that are currently in the build
     /// queue.
     pub fn build_meshes(&mut self) {
-        let mut queue = Vec::new();
+        while let Ok((position, mesh)) = self.rx.try_recv() {
+            self.meshes.insert(position, mesh);
+            self.build_queue.remove(&position);
+        }
 
-        for _ in 0..MAX_CHUNK_MESH_GENERATION_PER_FRAME {
-            let Some(position) = self.build_queue.pop_front() else {
-                break;
-            };
+        for position in &self.build_queue {
+            let tx = self.tx.clone();
+            let chunks = &self.chunks;
 
             if !self.chunks.contains_key(&position) {
-                // put the chunk back in the queue, it's voxel data hasn't been loaded
-                queue.push(position);
                 continue;
             }
 
-            let mesh = ChunkMeshBuilder::new(&self.chunks, position).build();
-            self.meshes.insert(position, MeshLoadState::Todo(mesh));
+            self.mesh_thread_pool.scope(move |_| {
+                let mesh = ChunkMeshBuilder::new(&chunks, *position).build();
+                tx.send((*position, MeshLoadState::Todo(mesh))).unwrap();
+            });
         }
-
-        self.build_queue.extend(queue);
     }
 
     /// Gets the chunks around a chunk in the provided radius.
