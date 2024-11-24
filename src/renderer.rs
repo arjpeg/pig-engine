@@ -237,9 +237,9 @@ impl<'s> Renderer<'s> {
     }
 
     /// Renders the currently bound vertex buffer onto the `surface`.
-    pub fn render(
+    pub fn render<'a>(
         &mut self,
-        meshes: &[&Mesh],
+        meshes: impl Iterator<Item = &'a Mesh>,
         ui: impl FnOnce(&Context),
     ) -> std::result::Result<(), SurfaceError> {
         let output = self.surface.get_current_texture()?;

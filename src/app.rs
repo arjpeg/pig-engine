@@ -169,11 +169,10 @@ impl<'a> App<'a> {
 
     /// Renders everything onto the surface.
     fn render(&mut self) {
-        let meshes = self.chunk_manager.loaded_meshes();
-
+        let mut meshes = self.chunk_manager.loaded_meshes();
         let fps = 1.0 / self.delta_time();
 
-        match self.renderer.render(&meshes, |ui| {
+        match self.renderer.render(&mut meshes, |ui| {
             Self::ui(ui, &self.camera, &self.chunk_manager, fps)
         }) {
             Ok(_) => {}
