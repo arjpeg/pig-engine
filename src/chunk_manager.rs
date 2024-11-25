@@ -20,7 +20,7 @@ pub const CHUNK_LOAD_PADDING: usize = 1;
 /// The maximum number of chunks whose voxel data can be generated per frame.
 pub const MAX_CHUNK_DATA_GENERATION_PER_FRAME: usize = 32;
 /// The maximum number of chunks whose meshes can be built per frame.
-pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 12;
+pub const MAX_CHUNK_MESH_GENERATION_PER_FRAME: usize = 16;
 
 type UnUploadedMesh = (Vec<MeshVertex>, Vec<u32>);
 

@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use egui::Context;
 use glam::Mat4;
@@ -27,7 +27,7 @@ pub trait Render<'a, T> {
     fn draw_object_instanced(&mut self, value: &'a T, instances: Range<u32>);
 }
 
-pub struct Renderer<'s> {
+pub struct Renderer {
     /// The actual physical device responsible for rendering things (most likely the GPU).
     pub device: wgpu::Device,
     /// The queue of commands being staged to be sent to the `device`.
@@ -38,12 +38,12 @@ pub struct Renderer<'s> {
     depth_texture: Texture,
 
     /// A reference to the surface being rendered onto.
-    surface: wgpu::Surface<'s>,
+    surface: wgpu::Surface<'static>,
     /// The configuration of the `surface`.
     surface_config: wgpu::SurfaceConfiguration,
 
     /// The renderer for egui.
-    egui_renderer: crate::egui_renderer::EguiRenderer<'s>,
+    egui_renderer: crate::egui_renderer::EguiRenderer,
 
     /// The models currently being rendered.
     models: Vec<crate::model::Model>,
@@ -57,16 +57,16 @@ pub struct Renderer<'s> {
     texture_bind_group: wgpu::BindGroup,
 }
 
-impl<'s> Renderer<'s> {
+impl Renderer {
     /// Creates a new renderer given a window as the surface.
-    pub async fn new(window: &'s Window, camera: &Camera) -> Result<Self> {
+    pub async fn new(window: Arc<Window>, camera: &Camera) -> Result<Self> {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::all(),
             flags: InstanceFlags::empty(),
             ..Default::default()
         });
 
-        let surface = instance.create_surface(window)?;
+        let surface = instance.create_surface(Arc::clone(&window))?;
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {

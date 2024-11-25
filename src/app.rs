@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Instant};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 
 use egui::Context;
 use glam::*;
@@ -16,10 +16,12 @@ use anyhow::Result;
 
 /// The main application struct that holds all the data and state of the
 /// application.
-pub struct App<'a> {
+pub struct App {
+    /// The window being rendered onto.
+    window: Arc<winit::window::Window>,
     /// The renderer responsible for interacting with wgpu and setting up the
     /// rendering device, and drawing out a scene.
-    renderer: crate::renderer::Renderer<'a>,
+    renderer: crate::renderer::Renderer,
     /// The camera in 3d space representing the player.
     camera: crate::camera::Camera,
 
@@ -36,9 +38,9 @@ pub struct App<'a> {
     chunk_manager: crate::chunk_manager::ChunkManager,
 }
 
-impl<'a> App<'a> {
+impl App {
     /// Sets up the renderer and camera.
-    pub async fn new(window: &'a Window) -> Result<Self> {
+    pub async fn new(window: Arc<Window>) -> Result<Self> {
         let camera = Camera::new(
             vec3(-33.0, 20.0, 50.0),
             -45.0f32.to_radians(),
@@ -46,9 +48,10 @@ impl<'a> App<'a> {
             window.inner_size(),
         );
 
-        let renderer = Renderer::new(window, &camera).await?;
+        let renderer = Renderer::new(Arc::clone(&window), &camera).await?;
 
         Ok(Self {
+            window,
             renderer,
             camera,
             has_focus: false,
@@ -65,15 +68,10 @@ impl<'a> App<'a> {
 
     /// Updates the app with the latest input state, and renders
     /// onto the surface.
-    pub fn update(
-        &mut self,
-        event: Event<()>,
-        elwt: &EventLoopWindowTarget<()>,
-        window: &Window,
-    ) -> Result<()> {
+    pub fn update(&mut self, event: Event<()>, elwt: &EventLoopWindowTarget<()>) -> Result<()> {
         match event {
             Event::AboutToWait => {
-                window.request_redraw();
+                self.window.request_redraw();
             }
 
             Event::WindowEvent { event, .. } => match event {
@@ -91,11 +89,11 @@ impl<'a> App<'a> {
                         },
                     ..
                 } => {
-                    self.toggle_focus(window);
+                    self.toggle_focus();
                 }
 
                 WindowEvent::MouseInput { .. } if !self.has_focus => {
-                    self.toggle_focus(window);
+                    self.toggle_focus();
                 }
 
                 WindowEvent::KeyboardInput {
@@ -153,15 +151,15 @@ impl<'a> App<'a> {
     }
 
     /// Toggles the current focus state of the app.
-    fn toggle_focus(&mut self, window: &Window) {
+    fn toggle_focus(&mut self) {
         self.has_focus = !self.has_focus;
 
         if self.has_focus {
-            window.set_cursor_visible(false);
-            window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+            self.window.set_cursor_visible(false);
+            self.window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
         } else {
-            window.set_cursor_visible(true);
-            window.set_cursor_grab(CursorGrabMode::None).unwrap();
+            self.window.set_cursor_visible(true);
+            self.window.set_cursor_grab(CursorGrabMode::None).unwrap();
 
             self.keys_held.clear();
         }

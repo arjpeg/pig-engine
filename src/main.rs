@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::sync::Arc;
+
 use app::App;
 use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
 
@@ -21,9 +23,9 @@ async fn main() -> anyhow::Result<()> {
         .with_inner_size(LogicalSize::new(1920, 1080))
         .build(&event_loop)?;
 
-    let mut app = App::new(&window).await?;
+    let mut app = App::new(Arc::new(window)).await?;
 
-    event_loop.run(|event, elwt| app.update(event, elwt, &window).unwrap())?;
+    event_loop.run(|event, elwt| app.update(event, elwt).unwrap())?;
 
     Ok(())
 }

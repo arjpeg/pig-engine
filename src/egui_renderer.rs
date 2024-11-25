@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use egui::Context;
 use egui_wgpu::{Renderer, ScreenDescriptor};
 use egui_winit::State;
@@ -7,28 +9,28 @@ use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 /// Ties together egui with wgpu, by providing a renderer that can render egui
 /// textures and meshes.
-pub struct EguiRenderer<'w> {
+pub struct EguiRenderer {
     /// The egui context that holds the state of the gui.
     context: egui::Context,
     /// The actual renderer that renders the egui context.
     renderer: egui_wgpu::Renderer,
 
     /// The window that the renderer is rendering to.
-    window: &'w winit::window::Window,
+    window: Arc<winit::window::Window>,
     /// egui's internal state of the window.
     state: egui_winit::State,
 }
 
-impl<'w> EguiRenderer<'w> {
+impl EguiRenderer {
     /// Creates a new egui renderer with the given window.
-    pub fn new(window: &'w Window, device: &Device, texture_format: TextureFormat) -> Self {
+    pub fn new(window: Arc<Window>, device: &Device, texture_format: TextureFormat) -> Self {
         let context = Context::default();
         let id = context.viewport_id();
 
         let state = State::new(
             context.clone(),
             id,
-            window,
+            &window,
             Some(window.scale_factor() as f32),
             None,
         );
@@ -45,7 +47,7 @@ impl<'w> EguiRenderer<'w> {
 
     /// Updates egui with the latest events.
     pub fn handle_input(&mut self, event: &WindowEvent) {
-        let _ = self.state.on_window_event(self.window, event);
+        let _ = self.state.on_window_event(&self.window, event);
     }
 
     /// Renders all egui content on to the surface.
@@ -57,11 +59,11 @@ impl<'w> EguiRenderer<'w> {
         view: &TextureView,
         ui: impl FnOnce(&Context),
     ) {
-        let input = self.state.take_egui_input(self.window);
+        let input = self.state.take_egui_input(&self.window);
         let full_output = self.context.run(input, ui);
 
         self.state
-            .handle_platform_output(self.window, full_output.platform_output);
+            .handle_platform_output(&self.window, full_output.platform_output);
 
         let tris = self
             .context
