@@ -11,6 +11,7 @@ mod camera;
 mod chunk;
 mod chunk_manager;
 mod egui_renderer;
+mod mesher;
 mod model;
 mod renderer;
 mod texture;

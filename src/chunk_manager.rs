@@ -8,14 +8,14 @@ use noise::NoiseFn;
 use rayon::ThreadPoolBuilder;
 use wgpu::Device;
 
-use crate::{chunk::*, model::*};
+use crate::{chunk::*, mesher::ChunkMesher, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 64;
+pub const CHUNK_LOAD_RADIUS: usize = 16;
 /// The size of the padding around loaded chunks. These padding chunks only have
 /// their voxel data generated; without their meshes being built.
-pub const CHUNK_LOAD_PADDING: usize = 1;
+pub const CHUNK_LOAD_PADDING: usize = 2;
 
 /// The maximum number of chunks whose voxel data can be generated per frame.
 pub const MAX_CHUNK_DATA_GENERATION_PER_FRAME: usize = 32;
@@ -235,7 +235,7 @@ impl ChunkManager {
             self.currently_meshing.insert(position);
 
             self.mesh_thread_pool.scope(move |_| {
-                let mesh = ChunkMeshBuilder::new(&chunks, position).build();
+                let mesh = ChunkMesher::new(&chunks, position).build();
                 tx.send((position, mesh)).unwrap();
             });
         }
