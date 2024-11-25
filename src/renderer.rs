@@ -12,7 +12,7 @@ use crate::{
     asset_loader::load_textures,
     camera::Camera,
     egui_renderer::EguiRenderer,
-    model::{Mesh, MeshVertex, Vertex},
+    model::{Mesh, MeshVertex},
     texture::Texture,
 };
 
@@ -45,8 +45,8 @@ pub struct Renderer {
     /// The renderer for egui.
     egui_renderer: crate::egui_renderer::EguiRenderer,
 
-    /// The models currently being rendered.
-    models: Vec<crate::model::Model>,
+    /// The meshes currently being rendered.
+    meshes: Vec<crate::model::Mesh>,
 
     /// A uniform buffer to hold the camera's view-projection matrix.
     camera_uniform: wgpu::Buffer,
@@ -109,7 +109,7 @@ impl Renderer {
             &[&camera_bind_group_layout, &texture_bind_group_layout],
         );
 
-        let models = Vec::new();
+        let meshes = Vec::new();
 
         Ok(Self {
             device,
@@ -118,7 +118,7 @@ impl Renderer {
             surface,
             surface_config,
             egui_renderer,
-            models,
+            meshes,
             camera_uniform,
             camera_bind_group,
             texture_bind_group,

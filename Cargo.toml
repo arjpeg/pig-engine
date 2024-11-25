@@ -15,12 +15,11 @@ bytemuck = { version = "1.16.1", features = ["derive"] }
 egui = "0.28.1"
 egui-wgpu = "0.28.1"
 egui-winit = "0.28.1"
-glam = "0.28.0"
+glam = { version = "0.29.2", features = ["bytemuck"] }
 image = "0.25.2"
 noise = "0.9.0"
 pollster = { version = "0.3.0", features = ["macro"] }
 rayon = "1.10.0"
 regex = "1.10.5"
-tobj = "4.0.2"
 wgpu = "0.20.1"
 winit = "0.29"

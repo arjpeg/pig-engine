@@ -58,12 +58,12 @@ pub fn load_textures(device: &Device, queue: &Queue) -> anyhow::Result<Texture> 
 }
 
 /// Gets the appropriate texture index for a given voxel oriented in this face direction.
-pub fn get_texture_index(voxel: &Voxel, face: &Face) -> Option<u32> {
+pub fn get_texture_index(voxel: &Voxel, face: &Face) -> Option<u16> {
     TEXTURE_UPLOAD_ORDER
         .get()?
         .iter()
         .position(|(v, f)| voxel == v && face == f)
-        .map(|index| index as u32)
+        .map(|index| index as u16)
 }
 
 impl FromStr for Face {

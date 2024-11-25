@@ -1,42 +1,17 @@
 use crate::renderer::Render;
-use glam::*;
 use wgpu::{util::*, *};
-
-/// Any format of vertex sent to the GPU.
-pub trait Vertex: bytemuck::Pod + bytemuck::Zeroable {
-    /// The vertex attributes of how the data is structured.
-    const ATTRIBS: &'static [VertexAttribute];
-
-    /// Returns the wgpu vertex buffer layout of how each vertex is interpreted.
-    fn desc() -> VertexBufferLayout<'static>
-    where
-        Self: Sized,
-    {
-        VertexBufferLayout {
-            array_stride: size_of::<Self>() as BufferAddress,
-            step_mode: VertexStepMode::Vertex,
-            attributes: Self::ATTRIBS,
-        }
-    }
-}
 
 /// A vertex in a mesh sent to the GPU.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MeshVertex {
     /// The 3d position of the vertex.
-    pub pos: [f32; 3],
+    pub pos: glam::Vec3,
     /// The normal vector of the vertex.
-    pub normal: [f32; 3],
-    /// The index into which texture to use. The order is determined
-    /// by which textures were loaded first.
-    pub texture_index: u32,
-}
-
-/// A model in the world, consisting of its mesh(es) and material(s).
-#[derive(Debug)]
-pub struct Model {
-    pub mesh: Mesh,
+    pub normal: glam::Vec3,
+    /// The first sixteen bits are an index into which texture layer to use, then the latter 16
+    /// bits represent the ambient occlusion value for this vertex.
+    pub texture_ambient: u32,
 }
 
 /// A mesh consists of a set of vertices connected by edges in triangles
@@ -52,16 +27,9 @@ pub struct Mesh {
     pub count: u32,
 }
 
-impl Model {
-    /// Creates a new model with the given mesh.
-    pub fn new(mesh: Mesh) -> Self {
-        Self { mesh }
-    }
-}
-
 impl Mesh {
     // Creates a new mesh and uploads the given vertex and index data to the GPU.
-    pub fn new<T: Vertex>(vertices: &[T], indices: &[u32], device: &Device) -> Self {
+    pub fn new(vertices: &[MeshVertex], indices: &[u32], device: &Device) -> Self {
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(vertices),
@@ -84,12 +52,22 @@ impl Mesh {
     }
 }
 
-impl Vertex for MeshVertex {
+impl MeshVertex {
+    /// The vertex attributes of how the data is structured.
     const ATTRIBS: &'static [VertexAttribute] = &vertex_attr_array![
         0 => Float32x3,
         1 => Float32x3,
         2 => Uint32
     ];
+
+    /// Returns the wgpu vertex buffer layout of how each vertex is interpreted.
+    pub fn desc() -> VertexBufferLayout<'static> {
+        VertexBufferLayout {
+            array_stride: size_of::<Self>() as BufferAddress,
+            step_mode: VertexStepMode::Vertex,
+            attributes: Self::ATTRIBS,
+        }
+    }
 }
 
 impl<'a, 'rp> Render<'a, Mesh> for RenderPass<'rp>

@@ -67,7 +67,7 @@ pub struct ChunkManager {
 impl ChunkManager {
     /// Creates a new chunk manager.
     pub fn new() -> Self {
-        let noise = Box::new(create_noise_generator(10));
+        let noise = Box::new(create_noise_generator(5));
 
         let chunk_thread_pool = ThreadPoolBuilder::new()
             .num_threads(16)

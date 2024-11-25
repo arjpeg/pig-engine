@@ -138,28 +138,28 @@ impl<'c> ChunkMesher<'c> {
                 continue;
             }
 
-            let [fx, fy, fz] = *face_normal;
-            let normal = [fx as f32, fy as f32, fz as f32];
+            let normal = Vec3::from_array(face_normal.map(|n| n as f32));
+            let texture_index = get_texture_index(&voxel, face).unwrap_or_else(|| {
+                panic!("could not find texture for '{voxel:?}' (face: '{face:?}')")
+            });
 
-            let vertices = FACE_VERTICES[index];
-
-            for position in vertices {
-                // the local position offset of the vertex relative
-                // to its center
+            for position in FACE_VERTICES[index] {
+                // the local position offset of the vertex relative to its center
                 let [lx, ly, lz] = position;
 
-                let pos = [
+                let pos = vec3(
                     x as f32 + lx + chunk_x_offset,
                     y as f32 + ly,
                     z as f32 + lz + chunk_z_offset,
-                ];
+                );
+
+                let ambient_occlusion = 0;
+                let texture_ambient = ((texture_index as u32) << 16) | ambient_occlusion;
 
                 self.vertices.push(MeshVertex {
                     pos,
                     normal,
-                    texture_index: get_texture_index(&voxel, face).unwrap_or_else(|| {
-                        panic!("could not find texture for '{voxel:?}' (face: '{face:?}')")
-                    }),
+                    texture_ambient,
                 });
             }
 
