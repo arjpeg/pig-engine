@@ -47,6 +47,19 @@ fn vs_main(
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-	return textureSample(texture, texture_sampler, input.uv, input.texture_index);
+	switch input.ambient {
+		case 0u: {
+			return vec4<f32>(0.2, 0.2, 0.3, 1.0);
+		}
+		case 1u: {
+			return vec4<f32>(0.4, 0.6, 0.5, 1.0);
+		}
+		case 2u: {
+			return vec4<f32>(0.6, 0.7, 0.6, 1.0);
+		}
+		default: {
+			return textureSample(texture, texture_sampler, input.uv, input.texture_index);
+		}
+	}
 }
 

@@ -43,8 +43,8 @@ impl App {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         let camera = Camera::new(
             vec3(-33.0, 20.0, 50.0),
-            -45.0f32.to_radians(),
-            -15.0f32.to_radians(),
+            180.0f32.to_radians(),
+            0.0,
             window.inner_size(),
         );
 
@@ -187,6 +187,7 @@ impl App {
 
         Window::new("debug").show(ui, |ui| {
             ui.label(format!("position: {:?}", camera.eye));
+            ui.label(format!("facing: {:?}", camera.forward));
 
             ui.label(format!("chunks loaded: {}", chunk_manager.chunks_loaded()));
             ui.label(format!("meshes built: {}", chunk_manager.meshes_loaded()));

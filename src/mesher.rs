@@ -17,52 +17,193 @@ const FACE_NORMALS: [(Face, [isize; 3]); 6] = [
     (Face::Side, [0, 0, -1]), // back
 ];
 
-const FACE_VERTICES: [[[f32; 3]; 4]; 6] = [
+const FACE_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
+
+const FACE_VERTICES: [[glam::Vec3; 4]; 6] = [
     // up
     [
-        [-0.5, 0.5, -0.5],
-        [-0.5, 0.5, 0.5],
-        [0.5, 0.5, 0.5],
-        [0.5, 0.5, -0.5],
+        vec3(-0.5, 0.5, -0.5),
+        vec3(-0.5, 0.5, 0.5),
+        vec3(0.5, 0.5, 0.5),
+        vec3(0.5, 0.5, -0.5),
     ],
     // down
     [
-        [-0.5, -0.5, 0.5],
-        [-0.5, -0.5, -0.5],
-        [0.5, -0.5, -0.5],
-        [0.5, -0.5, 0.5],
+        vec3(-0.5, -0.5, 0.5),
+        vec3(-0.5, -0.5, -0.5),
+        vec3(0.5, -0.5, -0.5),
+        vec3(0.5, -0.5, 0.5),
     ],
     // right
     [
-        [0.5, 0.5, 0.5],
-        [0.5, -0.5, 0.5],
-        [0.5, -0.5, -0.5],
-        [0.5, 0.5, -0.5],
+        vec3(0.5, 0.5, 0.5),
+        vec3(0.5, -0.5, 0.5),
+        vec3(0.5, -0.5, -0.5),
+        vec3(0.5, 0.5, -0.5),
     ],
     // left
     [
-        [-0.5, 0.5, -0.5],
-        [-0.5, -0.5, -0.5],
-        [-0.5, -0.5, 0.5],
-        [-0.5, 0.5, 0.5],
+        vec3(-0.5, 0.5, -0.5),
+        vec3(-0.5, -0.5, -0.5),
+        vec3(-0.5, -0.5, 0.5),
+        vec3(-0.5, 0.5, 0.5),
     ],
     // front
     [
-        [-0.5, 0.5, 0.5],
-        [-0.5, -0.5, 0.5],
-        [0.5, -0.5, 0.5],
-        [0.5, 0.5, 0.5],
+        vec3(-0.5, 0.5, 0.5),
+        vec3(-0.5, -0.5, 0.5),
+        vec3(0.5, -0.5, 0.5),
+        vec3(0.5, 0.5, 0.5),
     ],
     // back
     [
-        [0.5, 0.5, -0.5],
-        [0.5, -0.5, -0.5],
-        [-0.5, -0.5, -0.5],
-        [-0.5, 0.5, -0.5],
+        vec3(0.5, 0.5, -0.5),
+        vec3(0.5, -0.5, -0.5),
+        vec3(-0.5, -0.5, -0.5),
+        vec3(-0.5, 0.5, -0.5),
     ],
 ];
 
-const FACE_INDICES: [u32; 6] = [0, 1, 2, 2, 3, 0];
+#[rustfmt::skip]
+const AMBIENT_NEIGHBOR_OFFSETS_OLD: [[[isize; 3]; 8]; 6] = [
+    // top
+    [
+        [ -1,  1,  0 ], // left edge           0
+        [ -1,  1, -1 ], // back left corner    1
+        [  0,  1, -1 ], // back edge           2
+        [  1,  1, -1 ], // back right corner   3
+        [  1,  1,  0 ], // right edge          4
+        [  1,  1,  1 ], // front right corner  5
+        [  0,  1,  1 ], // front edge          6
+        [ -1,  1,  1 ], // front left corner   7
+    ],
+    // bottom
+    [
+        [ -1, -1,  0 ], // left edge          8
+        [ -1, -1, -1 ], // back left corner   9
+        [  0, -1, -1 ], // back edge          10
+        [  1, -1, -1 ], // back right corner  11
+        [  1, -1,  0 ], // right edge         12
+        [  1, -1,  1 ], // front right corner 13
+        [  0, -1,  1 ], // front edge         14
+        [ -1, -1,  1 ], // front left corner  15
+    ],
+    // right
+    [
+        [  1,  0,  1 ],
+        [  1,  1,  1 ],
+        [  1,  1,  0 ],
+        [  1,  1, -1 ],
+        [  1,  0, -1 ],
+        [  1, -1, -1 ],
+        [  1, -1,  0 ],
+        [  1, -1,  1 ],
+    ],
+    // left
+    [
+        [ -1,  0, -1 ],
+        [ -1,  1, -1 ],
+        [ -1,  1,  0 ],
+        [ -1,  1,  1 ],
+        [ -1,  0,  1 ],
+        [ -1, -1,  1 ],
+        [ -1, -1,  0 ],
+        [ -1, -1, -1 ],
+    ],
+    // front
+    [
+        [ -1,  0,  1 ],
+        [ -1,  1,  1 ],
+        [  0,  1,  1 ],
+        [  1,  1,  1 ],
+        [  1,  0,  1 ],
+        [  1, -1,  1 ],
+        [  0, -1,  1 ],
+        [ -1, -1,  1 ],
+
+    ],
+    // back
+    [
+        [  1,  0, -1 ],
+        [  1,  1, -1 ],
+        [  0,  1, -1 ],
+        [ -1,  1, -1 ],
+        [ -1,  0, -1 ],
+        [ -1, -1, -1 ],
+        [  0, -1, -1 ],
+        [  1, -1, -1 ],
+    ]    
+];
+
+#[rustfmt::skip]
+const AMBIENT_NEIGHBOR_OFFSETS: [[[isize; 3]; 8]; 6] = [
+    // top
+    [
+        [  0,  1, -1 ], // back edge           2
+        [ -1,  1, -1 ], // back left corner    1
+        [ -1,  1,  0 ], // left edge           0
+        [ -1,  1,  1 ], // front left corner   7
+        [  0,  1,  1 ], // front edge          6
+        [  1,  1,  1 ], // front right corner  5
+        [  1,  1,  0 ], // right edge          4
+        [  1,  1, -1 ], // back right corner   3
+    ],
+    // bottom
+    [
+        [  0, -1, -1 ],
+        [ -1, -1, -1 ],
+        [ -1, -1,  0 ],
+        [ -1, -1,  1 ],
+        [  0, -1,  1 ],
+        [  1, -1,  1 ],
+        [  1, -1,  0 ],
+        [  1, -1, -1 ],
+    ],
+    // right
+    [
+        [  1,  1,  0 ],
+        [  1,  1,  1 ],
+        [  1,  0,  1 ],
+        [  1, -1,  1 ],
+        [  1, -1,  0 ],
+        [  1, -1, -1 ],
+        [  1,  0, -1 ],
+        [  1,  1, -1 ],
+    ],
+    // left
+    [
+        [ -1,  1,  0 ],
+        [ -1,  1, -1 ],
+        [ -1,  0, -1 ],
+        [ -1, -1, -1 ],
+        [ -1, -1,  0 ],
+        [ -1, -1,  1 ],
+        [ -1,  0,  1 ],
+        [ -1,  1,  1 ],
+    ],
+    // front
+    [
+        [  0,  1,  1 ],
+        [ -1,  1,  1 ],
+        [ -1,  0,  1 ],
+        [ -1, -1,  1 ],
+        [  0, -1,  1 ],
+        [  1, -1,  1 ],
+        [  1,  0,  1 ],
+        [  1,  1,  1 ],
+    ],
+    // back
+    [
+        [  0,  1, -1 ],
+        [ -1,  1, -1 ],
+        [ -1,  0, -1 ],
+        [ -1, -1, -1 ],
+        [  0, -1, -1 ],
+        [  1, -1, -1 ],
+        [  1,  0, -1 ],
+        [  1,  1, -1 ],
+    ]
+];
 
 /// Generates a mesh for a given chunk.
 #[derive(Debug)]
@@ -122,42 +263,54 @@ impl<'c> ChunkMesher<'c> {
         })
     }
 
-    fn add_block(&mut self, block_pos: [usize; 3]) {
-        if !self.chunk.is_block_full(block_pos) {
+    /// Gets the ambient occlusion values for the given normal direction and position. The order of
+    /// the ao values matches the order of the vertices.
+    fn calculate_ambient_occlusion(&self, position: [usize; 3], normal_index: usize) -> [u32; 4] {
+        // up
+        // down
+        // right
+        // left
+        // front
+        // back
+
+        let sample_directions = match normal_index {
+            0 => [[-1, 0]],
+        };
+    }
+
+    fn add_block(&mut self, position: [usize; 3]) {
+        if !self.chunk.is_block_full(position) {
             return;
         }
 
-        let [x, y, z] = block_pos;
+        let [x, y, z] = position;
         let voxel = self.chunk.voxels[y][z][x];
 
-        let chunk_x_offset = self.chunk.position.x as f32 * CHUNK_WIDTH as f32;
-        let chunk_z_offset = self.chunk.position.y as f32 * CHUNK_WIDTH as f32;
+        let local_position = vec3(x as f32, y as f32, z as f32);
+        let chunk_offset = self.chunk.position.extend(0).xzy().as_vec3() * CHUNK_WIDTH as f32;
 
-        for (index, (face, face_normal)) in FACE_NORMALS.iter().enumerate() {
-            if self.is_solid(self.chunk.get_world_position(block_pos, *face_normal)) {
+        for (normal_index, (face, normal)) in FACE_NORMALS.iter().enumerate() {
+            if self.is_solid(self.chunk.get_world_position(position, *normal)) {
                 continue;
             }
 
-            let normal = Vec3::from_array(face_normal.map(|n| n as f32));
+            let normal = Vec3::from_array(normal.map(|n| n as f32));
             let texture_index = get_texture_index(&voxel, face).unwrap_or_else(|| {
                 panic!("could not find texture for '{voxel:?}' (face: '{face:?}')")
             });
 
-            for position in FACE_VERTICES[index] {
-                // the local position offset of the vertex relative to its center
-                let [lx, ly, lz] = position;
+            for (vertex_index, voxel_center_offset) in
+                FACE_VERTICES[normal_index].iter().enumerate()
+            {
+                let world_position = voxel_center_offset + local_position + chunk_offset;
 
-                let pos = vec3(
-                    x as f32 + lx + chunk_x_offset,
-                    y as f32 + ly,
-                    z as f32 + lz + chunk_z_offset,
-                );
+                let ambient_occlusion =
+                    self.calculate_ambient_occlusion(position, normal_index, vertex_index);
 
-                let ambient_occlusion = 0;
                 let texture_ambient = ((texture_index as u32) << 16) | ambient_occlusion;
 
                 self.vertices.push(MeshVertex {
-                    pos,
+                    pos: world_position,
                     normal,
                     texture_ambient,
                 });
