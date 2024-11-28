@@ -65,77 +65,6 @@ const FACE_VERTICES: [[glam::Vec3; 4]; 6] = [
 ];
 
 #[rustfmt::skip]
-const AMBIENT_NEIGHBOR_OFFSETS_OLD: [[[isize; 3]; 8]; 6] = [
-    // top
-    [
-        [ -1,  1,  0 ], // left edge           0
-        [ -1,  1, -1 ], // back left corner    1
-        [  0,  1, -1 ], // back edge           2
-        [  1,  1, -1 ], // back right corner   3
-        [  1,  1,  0 ], // right edge          4
-        [  1,  1,  1 ], // front right corner  5
-        [  0,  1,  1 ], // front edge          6
-        [ -1,  1,  1 ], // front left corner   7
-    ],
-    // bottom
-    [
-        [ -1, -1,  0 ], // left edge          8
-        [ -1, -1, -1 ], // back left corner   9
-        [  0, -1, -1 ], // back edge          10
-        [  1, -1, -1 ], // back right corner  11
-        [  1, -1,  0 ], // right edge         12
-        [  1, -1,  1 ], // front right corner 13
-        [  0, -1,  1 ], // front edge         14
-        [ -1, -1,  1 ], // front left corner  15
-    ],
-    // right
-    [
-        [  1,  0,  1 ],
-        [  1,  1,  1 ],
-        [  1,  1,  0 ],
-        [  1,  1, -1 ],
-        [  1,  0, -1 ],
-        [  1, -1, -1 ],
-        [  1, -1,  0 ],
-        [  1, -1,  1 ],
-    ],
-    // left
-    [
-        [ -1,  0, -1 ],
-        [ -1,  1, -1 ],
-        [ -1,  1,  0 ],
-        [ -1,  1,  1 ],
-        [ -1,  0,  1 ],
-        [ -1, -1,  1 ],
-        [ -1, -1,  0 ],
-        [ -1, -1, -1 ],
-    ],
-    // front
-    [
-        [ -1,  0,  1 ],
-        [ -1,  1,  1 ],
-        [  0,  1,  1 ],
-        [  1,  1,  1 ],
-        [  1,  0,  1 ],
-        [  1, -1,  1 ],
-        [  0, -1,  1 ],
-        [ -1, -1,  1 ],
-
-    ],
-    // back
-    [
-        [  1,  0, -1 ],
-        [  1,  1, -1 ],
-        [  0,  1, -1 ],
-        [ -1,  1, -1 ],
-        [ -1,  0, -1 ],
-        [ -1, -1, -1 ],
-        [  0, -1, -1 ],
-        [  1, -1, -1 ],
-    ]    
-];
-
-#[rustfmt::skip]
 const AMBIENT_NEIGHBOR_OFFSETS: [[[isize; 3]; 8]; 6] = [
     // top
     [
@@ -266,16 +195,27 @@ impl<'c> ChunkMesher<'c> {
     /// Gets the ambient occlusion values for the given normal direction and position. The order of
     /// the ao values matches the order of the vertices.
     fn calculate_ambient_occlusion(&self, position: [usize; 3], normal_index: usize) -> [u32; 4] {
-        // up
-        // down
-        // right
-        // left
-        // front
-        // back
-
-        let sample_directions = match normal_index {
-            0 => [[-1, 0]],
+        let ao_value = |side_0, corner, side_1| {
+            if side_0 == 1 && side_1 == 1 {
+                // fully dark
+                0
+            } else {
+                3 - (side_0 + side_1 + corner)
+            }
         };
+
+        let neighbor_samples = AMBIENT_NEIGHBOR_OFFSETS[normal_index]
+            .map(|offset| self.chunk.offset_local_in_direction(position, offset))
+            .map(|position| self.is_solid(position) as u32);
+
+        let n = neighbor_samples;
+
+        [
+            ao_value(n[0], n[1], n[2]),
+            ao_value(n[2], n[3], n[4]),
+            ao_value(n[4], n[5], n[6]),
+            ao_value(n[6], n[7], n[0]),
+        ]
     }
 
     fn add_block(&mut self, position: [usize; 3]) {
@@ -290,7 +230,7 @@ impl<'c> ChunkMesher<'c> {
         let chunk_offset = self.chunk.position.extend(0).xzy().as_vec3() * CHUNK_WIDTH as f32;
 
         for (normal_index, (face, normal)) in FACE_NORMALS.iter().enumerate() {
-            if self.is_solid(self.chunk.get_world_position(position, *normal)) {
+            if self.is_solid(self.chunk.offset_local_in_direction(position, *normal)) {
                 continue;
             }
 
@@ -299,14 +239,12 @@ impl<'c> ChunkMesher<'c> {
                 panic!("could not find texture for '{voxel:?}' (face: '{face:?}')")
             });
 
-            for (vertex_index, voxel_center_offset) in
-                FACE_VERTICES[normal_index].iter().enumerate()
+            let ao_values = self.calculate_ambient_occlusion(position, normal_index);
+
+            for (voxel_center_offset, ambient_occlusion) in
+                FACE_VERTICES[normal_index].iter().zip(ao_values)
             {
                 let world_position = voxel_center_offset + local_position + chunk_offset;
-
-                let ambient_occlusion =
-                    self.calculate_ambient_occlusion(position, normal_index, vertex_index);
-
                 let texture_ambient = ((texture_index as u32) << 16) | ambient_occlusion;
 
                 self.vertices.push(MeshVertex {

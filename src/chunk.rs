@@ -10,12 +10,7 @@ pub const CHUNK_WIDTH: usize = 16;
 pub const CHUNK_HEIGHT: usize = 256;
 
 /// The scale factor used to sample noise values for chunk generation.
-pub const NOISE_SCALE: f64 = 1.0 / 500.0;
-/// The rate at which the frequency of the noise increases with each octave.
-pub const LACUNARITY: f64 = 2.05;
-
-/// The number of octaves used for noise generation.
-pub const NUM_OCTAVES: usize = 8;
+const NOISE_SCALE: f64 = 1.0 / 500.0;
 
 /// A 3d grid of voxels.
 pub type VoxelGrid = [[[Voxel; CHUNK_WIDTH]; CHUNK_WIDTH]; CHUNK_HEIGHT];
@@ -33,6 +28,11 @@ pub enum Voxel {
 
 /// Creates a noise function that can be used to create interesting terrain.
 pub fn create_noise_generator(seed: u32) -> impl NoiseFn<f64, 2> {
+    /// The rate at which the frequency of the noise increases with each octave.
+    const CONTINENT_LACUNARITY: f64 = 2.05;
+    /// The number of octaves used for noise generation.
+    const NUM_OCTAVES: usize = 8;
+
     use noise::*;
 
     const SEA_LEVEL: f64 = 0.0;
@@ -40,7 +40,7 @@ pub fn create_noise_generator(seed: u32) -> impl NoiseFn<f64, 2> {
     let continents = Fbm::<Perlin>::new(seed)
         .set_frequency(0.2)
         .set_octaves(NUM_OCTAVES)
-        .set_lacunarity(LACUNARITY);
+        .set_lacunarity(CONTINENT_LACUNARITY);
 
     let mountain_ranges_curuve = Curve::new(continents)
         .add_control_point(-2.0 + SEA_LEVEL, -1.625 + SEA_LEVEL)
@@ -103,11 +103,14 @@ impl Chunk {
 
     /// Returns the world position of a voxel with some delta direction.
     /// This position may not be within the bounds of the chunk.
-    pub fn get_world_position(
+    pub fn offset_local_in_direction(
         &self,
-        [x, y, z]: [usize; 3],
-        [dx, dy, dz]: [isize; 3],
+        local_position: [usize; 3],
+        direction: [isize; 3],
     ) -> [isize; 3] {
+        let [x, y, z] = local_position;
+        let [dx, dy, dz] = direction;
+
         let chunk_x_offset = self.position.x as isize * CHUNK_WIDTH as isize;
         let chunk_z_offset = self.position.y as isize * CHUNK_WIDTH as isize;
 
