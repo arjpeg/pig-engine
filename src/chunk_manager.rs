@@ -12,7 +12,7 @@ use crate::{chunk::*, mesher::ChunkMesher, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 16;
+pub const CHUNK_LOAD_RADIUS: usize = 32;
 /// The size of the padding around loaded chunks. These padding chunks only have
 /// their voxel data generated; without their meshes being built.
 pub const CHUNK_LOAD_PADDING: usize = 2;
@@ -221,6 +221,8 @@ impl ChunkManager {
             );
         }
 
+        let mut reinsert = Vec::new();
+
         for position in self
             .build_queue
             .drain(..MAX_CHUNK_MESH_GENERATION_PER_FRAME.min(self.build_queue.len()))
@@ -229,6 +231,7 @@ impl ChunkManager {
             let chunks = &self.chunks;
 
             if !self.chunks.contains_key(&position) {
+                reinsert.push(position);
                 continue;
             }
 
@@ -239,6 +242,8 @@ impl ChunkManager {
                 tx.send((position, mesh)).unwrap();
             });
         }
+
+        self.build_queue.extend(reinsert);
     }
 
     /// Gets the chunks around a chunk in the provided radius.

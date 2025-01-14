@@ -43,10 +43,7 @@ pub struct Renderer {
     surface_config: wgpu::SurfaceConfiguration,
 
     /// The renderer for egui.
-    egui_renderer: crate::egui_renderer::EguiRenderer,
-
-    /// The meshes currently being rendered.
-    meshes: Vec<crate::model::Mesh>,
+    pub egui_renderer: crate::egui_renderer::EguiRenderer,
 
     /// A uniform buffer to hold the camera's view-projection matrix.
     camera_uniform: wgpu::Buffer,
@@ -109,8 +106,6 @@ impl Renderer {
             &[&camera_bind_group_layout, &texture_bind_group_layout],
         );
 
-        let meshes = Vec::new();
-
         Ok(Self {
             device,
             queue,
@@ -118,7 +113,6 @@ impl Renderer {
             surface,
             surface_config,
             egui_renderer,
-            meshes,
             camera_uniform,
             camera_bind_group,
             texture_bind_group,

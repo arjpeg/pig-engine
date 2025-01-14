@@ -74,68 +74,9 @@ impl App {
                 self.window.request_redraw();
             }
 
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(size) => {
-                    self.renderer.resize(size);
-                    self.camera.resize(size);
-                }
-
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            physical_key: PhysicalKey::Code(KeyCode::Escape),
-                            state: ElementState::Pressed,
-                            ..
-                        },
-                    ..
-                } => {
-                    self.toggle_focus();
-                }
-
-                WindowEvent::MouseInput { .. } if !self.has_focus => {
-                    self.toggle_focus();
-                }
-
-                WindowEvent::KeyboardInput {
-                    event:
-                        KeyEvent {
-                            physical_key: key,
-                            state,
-                            ..
-                        },
-                    ..
-                } => {
-                    let PhysicalKey::Code(code) = key else {
-                        eprintln!("unknown key code, {key:?}");
-                        return Ok(());
-                    };
-
-                    match state {
-                        ElementState::Pressed => self.keys_held.insert(code),
-                        ElementState::Released => self.keys_held.remove(&code),
-                    };
-                }
-
-                WindowEvent::CloseRequested => elwt.exit(),
-
-                WindowEvent::RedrawRequested => {
-                    if self.has_focus {
-                        self.camera
-                            .update_position(&self.keys_held, self.delta_time());
-                    }
-
-                    self.last_frame = Instant::now();
-
-                    self.chunk_manager.update(self.camera.eye);
-                    self.chunk_manager
-                        .resolve_mesh_uploads(&self.renderer.device);
-
-                    self.renderer.update_camera_buffer(self.camera.view_proj());
-                    self.render();
-                }
-
-                _ => {}
-            },
+            Event::WindowEvent { event, .. } => {
+                self.handle_window_event(event, elwt);
+            }
 
             Event::DeviceEvent {
                 event: DeviceEvent::MouseMotion { delta },
@@ -148,6 +89,76 @@ impl App {
         }
 
         Ok(())
+    }
+
+    /// Handles a window event.
+    fn handle_window_event(&mut self, event: WindowEvent, elwt: &EventLoopWindowTarget<()>) {
+        if self.renderer.egui_renderer.handle_input(&event) {
+            return;
+        };
+
+        match event {
+            WindowEvent::Resized(size) => {
+                self.renderer.resize(size);
+                self.camera.resize(size);
+            }
+
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(KeyCode::Escape),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                self.toggle_focus();
+            }
+
+            WindowEvent::MouseInput { .. } if !self.has_focus => {
+                self.toggle_focus();
+            }
+
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: key,
+                        state,
+                        ..
+                    },
+                ..
+            } => {
+                let PhysicalKey::Code(code) = key else {
+                    eprintln!("unknown key code, {key:?}");
+                    return;
+                };
+
+                match state {
+                    ElementState::Pressed => self.keys_held.insert(code),
+                    ElementState::Released => self.keys_held.remove(&code),
+                };
+            }
+
+            WindowEvent::CloseRequested => elwt.exit(),
+
+            WindowEvent::RedrawRequested => {
+                if self.has_focus {
+                    self.camera
+                        .update_position(&self.keys_held, self.delta_time());
+                }
+
+                self.last_frame = Instant::now();
+
+                self.chunk_manager.update(self.camera.eye);
+                self.chunk_manager
+                    .resolve_mesh_uploads(&self.renderer.device);
+
+                self.renderer.update_camera_buffer(self.camera.view_proj());
+                self.render();
+            }
+
+            _ => {}
+        }
     }
 
     /// Toggles the current focus state of the app.

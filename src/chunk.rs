@@ -28,33 +28,29 @@ pub enum Voxel {
 
 /// Creates a noise function that can be used to create interesting terrain.
 pub fn create_noise_generator(seed: u32) -> impl NoiseFn<f64, 2> {
-    /// The rate at which the frequency of the noise increases with each octave.
-    const CONTINENT_LACUNARITY: f64 = 2.05;
+    use noise::*;
+
     /// The number of octaves used for noise generation.
     const NUM_OCTAVES: usize = 8;
 
-    use noise::*;
-
-    const SEA_LEVEL: f64 = 0.0;
-
-    let continents = Fbm::<Perlin>::new(seed)
+    let continents_fbm = Fbm::<Perlin>::new(seed)
         .set_frequency(0.2)
-        .set_octaves(NUM_OCTAVES)
-        .set_lacunarity(CONTINENT_LACUNARITY);
+        .set_lacunarity(2.05)
+        .set_persistence(0.5)
+        .set_octaves(NUM_OCTAVES);
 
-    let mountain_ranges_curuve = Curve::new(continents)
-        .add_control_point(-2.0 + SEA_LEVEL, -1.625 + SEA_LEVEL)
-        .add_control_point(-1.0 + SEA_LEVEL, -1.375 + SEA_LEVEL)
-        .add_control_point(SEA_LEVEL, -0.375 + SEA_LEVEL)
-        .add_control_point(0.0625 + SEA_LEVEL, 0.125 + SEA_LEVEL)
-        .add_control_point(0.125 + SEA_LEVEL, 0.25 + SEA_LEVEL)
-        .add_control_point(0.25 + SEA_LEVEL, 1.0 + SEA_LEVEL)
-        .add_control_point(0.5 + SEA_LEVEL, 0.25 + SEA_LEVEL)
-        .add_control_point(0.75 + SEA_LEVEL, 0.25 + SEA_LEVEL)
-        .add_control_point(1.0 + SEA_LEVEL, 0.5 + SEA_LEVEL)
-        .add_control_point(2.0 + SEA_LEVEL, 0.5 + SEA_LEVEL);
+    let scaled_noise = Curve::new(continents_fbm)
+        .add_control_point(-2.0, -1.625)
+        .add_control_point(-1.0, -1.375)
+        .add_control_point(0.0, -0.375)
+        .add_control_point(0.0625, 0.125)
+        .add_control_point(0.125, 0.25)
+        .add_control_point(0.25, 1.0)
+        .add_control_point(0.5, 0.2)
+        .add_control_point(1.0, 0.5)
+        .add_control_point(2.0, 0.25);
 
-    mountain_ranges_curuve
+    scaled_noise
 }
 
 /// A collection of voxels grouped within a AABB rectangle to increase performance
@@ -86,19 +82,6 @@ impl Chunk {
         let [x, y, z] = block_pos;
 
         self.voxels[y][z][x] != Voxel::Air
-    }
-
-    /// Utility to add a block position with some delta direction, and return
-    /// the position if it was within the bounds of a chunk, or else None.
-    pub fn get_block_in_direction(
-        [x, y, z]: [usize; 3],
-        [dx, dy, dz]: [isize; 3],
-    ) -> Option<[usize; 3]> {
-        let x = x.checked_add_signed(dx).filter(|n| *n < CHUNK_WIDTH)?;
-        let z = z.checked_add_signed(dz).filter(|n| *n < CHUNK_WIDTH)?;
-        let y = y.checked_add_signed(dy).filter(|n| *n < CHUNK_HEIGHT)?;
-
-        Some([x, y, z])
     }
 
     /// Returns the world position of a voxel with some delta direction.
@@ -138,16 +121,19 @@ impl Chunk {
 
     /// Fills the chunk in using noise values.
     pub fn fill_perlin(&mut self, noise: impl NoiseFn<f64, 2>) {
-        let global_position = (self.position * CHUNK_WIDTH as i32).as_vec2();
+        let chunk_position = (self.position * CHUNK_WIDTH as i32).as_vec2();
 
         for z in 0..CHUNK_WIDTH {
             for x in 0..CHUNK_WIDTH {
                 let local_position = vec2(x as f32, z as f32);
-                let position = (global_position + local_position).as_dvec2() * NOISE_SCALE;
+                let position = (chunk_position + local_position).as_dvec2() * NOISE_SCALE;
 
-                //let height = (self.get_voxel(&noise, base_position) as usize).min(CHUNK_HEIGHT - 1);
-                let height = (noise.get(position.to_array()) + 1.0) / 2.0 * CHUNK_HEIGHT as f64;
-                let height = height.min(CHUNK_HEIGHT as f64 - 2.0) as usize;
+                let height = {
+                    let sample = noise.get(position.to_array());
+                    let sample = (sample + 1.0) / 2.0; // put sample in [0, 1]
+
+                    ((sample * CHUNK_HEIGHT as f64) as usize).clamp(0, CHUNK_HEIGHT - 2)
+                };
 
                 for y in 0..=height {
                     self.voxels[y][z][x] = match y {

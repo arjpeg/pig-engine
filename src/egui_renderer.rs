@@ -46,8 +46,8 @@ impl EguiRenderer {
     }
 
     /// Updates egui with the latest events.
-    pub fn handle_input(&mut self, event: &WindowEvent) {
-        let _ = self.state.on_window_event(&self.window, event);
+    pub fn handle_input(&mut self, event: &WindowEvent) -> bool {
+        self.state.on_window_event(&self.window, event).consumed
     }
 
     /// Renders all egui content on to the surface.
