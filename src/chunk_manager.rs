@@ -12,7 +12,7 @@ use crate::{chunk::*, mesher::ChunkMesher, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 32;
+pub const CHUNK_LOAD_RADIUS: usize = 64;
 /// The size of the padding around loaded chunks. These padding chunks only have
 /// their voxel data generated; without their meshes being built.
 pub const CHUNK_LOAD_PADDING: usize = 2;
