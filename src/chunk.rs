@@ -39,17 +39,17 @@ pub fn create_noise_generator(seed: u32) -> impl NoiseFn<f64, 2> {
         .set_persistence(0.5)
         .set_octaves(NUM_OCTAVES);
 
-    let scaled_noise = Curve::new(continents_fbm)
-        .add_control_point(-1.0, -1.0)
+    Curve::new(continents_fbm)
+        .add_control_point(-1.5, -1.675)
+        .add_control_point(-1.0, -1.375)
         .add_control_point(0.0, -0.375)
         .add_control_point(0.0625, 0.125)
         .add_control_point(0.125, 0.25)
         .add_control_point(0.25, 1.0)
         .add_control_point(0.5, 0.2)
         .add_control_point(1.0, 0.5)
-        .add_control_point(2.0, 0.25);
-
-    scaled_noise
+        .add_control_point(2.0, 0.25)
+        .add_control_point(2.0, 0.9)
 }
 
 /// A collection of voxels grouped within a AABB rectangle to increase performance

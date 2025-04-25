@@ -280,9 +280,16 @@ impl Renderer {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &self.texture_bind_group, &[]);
 
+            let start = std::time::Instant::now();
+
             for model in meshes {
                 render_pass.draw_object(model);
             }
+
+            println!(
+                "rendering took: {:.2}ms",
+                start.elapsed().as_secs_f32() * 100.0
+            );
         };
 
         self.egui_renderer
