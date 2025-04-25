@@ -33,6 +33,8 @@ pub struct App {
 
     /// The time of the last rendering frame.
     last_frame: std::time::Instant,
+    /// The time since the last frame (delta time).
+    dt: f32,
 
     /// The chunk manager used to manage chunks around the player.
     chunk_manager: crate::chunk_manager::ChunkManager,
@@ -57,13 +59,9 @@ impl App {
             has_focus: false,
             keys_held: HashSet::new(),
             last_frame: Instant::now(),
+            dt: 0.0,
             chunk_manager: ChunkManager::new(),
         })
-    }
-
-    /// Returns the time elapsed since the last frame, in seconds
-    fn delta_time(&self) -> f32 {
-        (Instant::now() - self.last_frame).as_secs_f32()
     }
 
     /// Updates the app with the latest input state, and renders
@@ -82,7 +80,7 @@ impl App {
                 event: DeviceEvent::MouseMotion { delta },
                 ..
             } if self.has_focus => {
-                self.camera.update_orientation(delta, self.delta_time());
+                self.camera.update_orientation(delta, self.dt);
             }
 
             _ => {}
@@ -143,10 +141,10 @@ impl App {
 
             WindowEvent::RedrawRequested => {
                 if self.has_focus {
-                    self.camera
-                        .update_position(&self.keys_held, self.delta_time());
+                    self.camera.update_position(&self.keys_held, self.dt);
                 }
 
+                self.dt = self.last_frame.elapsed().as_secs_f32();
                 self.last_frame = Instant::now();
 
                 self.chunk_manager.update(self.camera.eye);
@@ -179,7 +177,7 @@ impl App {
     /// Renders everything onto the surface.
     fn render(&mut self) {
         let mut meshes = self.chunk_manager.loaded_meshes();
-        let fps = 1.0 / self.delta_time();
+        let fps = 1.0 / self.dt;
 
         match self.renderer.render(&mut meshes, |ui| {
             Self::ui(ui, &self.camera, &self.chunk_manager, fps)
@@ -203,7 +201,7 @@ impl App {
             ui.label(format!("chunks loaded: {}", chunk_manager.chunks_loaded()));
             ui.label(format!("meshes built: {}", chunk_manager.meshes_loaded()));
 
-            ui.label(format!("fps: {}", (fps as u32 / 10) * 10));
+            ui.label(format!("fps: {:.02}", fps));
         });
     }
 }

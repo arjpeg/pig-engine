@@ -40,8 +40,7 @@ pub fn create_noise_generator(seed: u32) -> impl NoiseFn<f64, 2> {
         .set_octaves(NUM_OCTAVES);
 
     let scaled_noise = Curve::new(continents_fbm)
-        .add_control_point(-2.0, -1.625)
-        .add_control_point(-1.0, -1.375)
+        .add_control_point(-1.0, -1.0)
         .add_control_point(0.0, -0.375)
         .add_control_point(0.0625, 0.125)
         .add_control_point(0.125, 0.25)
@@ -79,7 +78,9 @@ impl Chunk {
 
     /// Returns a list of the neighbor chunks' positions.
     pub fn neighbors(&self) -> impl Iterator<Item = IVec2> {
-        (-1..=1).flat_map(|x| (-1..=1).map(move |z| (IVec2::new(x, z))))
+        let position = self.position;
+
+        (-1..=1).flat_map(move |x| (-1..=1).map(move |z| (IVec2::new(x, z) + position)))
     }
 
     /// Returns if the voxel at the given position is non empty (not air).
