@@ -77,6 +77,11 @@ impl Chunk {
         x < CHUNK_WIDTH && z < CHUNK_WIDTH && y < CHUNK_HEIGHT
     }
 
+    /// Returns a list of the neighbor chunks' positions.
+    pub fn neighbors(&self) -> impl Iterator<Item = IVec2> {
+        (-1..=1).flat_map(|x| (-1..=1).map(move |z| (IVec2::new(x, z))))
+    }
+
     /// Returns if the voxel at the given position is non empty (not air).
     pub fn is_block_full(&self, block_pos: [usize; 3]) -> bool {
         let [x, y, z] = block_pos;

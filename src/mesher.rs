@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     asset_loader::{get_texture_index, Face},
@@ -136,11 +136,11 @@ const AMBIENT_NEIGHBOR_OFFSETS: [[[isize; 3]; 8]; 6] = [
 
 /// Generates a mesh for a given chunk.
 #[derive(Debug)]
-pub struct ChunkMesher<'a> {
+pub struct ChunkMesher {
     /// The chunk whose mesh is being built.
-    chunk: &'a crate::chunk::Chunk,
+    chunk: Arc<crate::chunk::Chunk>,
     /// A list of the chunks surrounding the chunk.
-    chunks: &'a HashMap<glam::IVec2, crate::chunk::Chunk>,
+    chunks: HashMap<glam::IVec2, Arc<crate::chunk::Chunk>>,
 
     /// The vertices generated so far.
     vertices: Vec<MeshVertex>,
@@ -148,13 +148,14 @@ pub struct ChunkMesher<'a> {
     indices: Vec<u32>,
 }
 
-impl<'c> ChunkMesher<'c> {
+impl ChunkMesher {
     /// Creates a new chunk mesh builder given a chunk.
-    pub fn new(chunks: &'c HashMap<IVec2, Chunk>, chunk: IVec2) -> Self {
+    pub fn new(chunks: HashMap<IVec2, Arc<Chunk>>, chunk: IVec2) -> Self {
         Self {
             chunk: chunks
                 .get(&chunk)
-                .expect("cannot build mesh for unloaded chunk"),
+                .expect("cannot build mesh for unloaded chunk")
+                .clone(),
             chunks,
             vertices: Vec::new(),
             indices: Vec::new(),

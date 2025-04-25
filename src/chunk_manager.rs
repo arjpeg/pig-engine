@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::mpsc,
+    sync::{mpsc, Arc},
 };
 
 use glam::{ivec2, IVec2, Vec3};
@@ -12,7 +12,7 @@ use crate::{chunk::*, mesher::ChunkMesher, model::*};
 
 /// The radius around the player in which chunks are loaded. One extra chunk
 /// in both the x and z axes are loaded as padding for mesh generation.
-pub const CHUNK_LOAD_RADIUS: usize = 64;
+pub const CHUNK_LOAD_RADIUS: usize = 32;
 /// The size of the padding around loaded chunks. These padding chunks only have
 /// their voxel data generated; without their meshes being built.
 pub const CHUNK_LOAD_PADDING: usize = 2;
@@ -27,10 +27,10 @@ type UnUploadedMesh = (Vec<MeshVertex>, Vec<u32>);
 /// Manages the loading and unloading of chunks around the player.
 pub struct ChunkManager {
     /// The noise generator used to generate terrain, etc.
-    noise: Box<dyn NoiseFn<f64, 2> + Send + Sync>,
+    noise: Arc<dyn NoiseFn<f64, 2> + Send + Sync>,
 
     /// The chunks that are currently loaded.
-    chunks: HashMap<glam::IVec2, Chunk>,
+    chunks: HashMap<glam::IVec2, Arc<Chunk>>,
     /// The meshes of the chunks that have been made and uploaded to the GPU.
     uploaded_meshes: HashMap<glam::IVec2, Mesh>,
     /// The meshes of the chunks that have been made but not yet been uploaded to the GPU.
@@ -67,7 +67,7 @@ pub struct ChunkManager {
 impl ChunkManager {
     /// Creates a new chunk manager.
     pub fn new() -> Self {
-        let noise = Box::new(create_noise_generator(129));
+        let noise = Arc::new(create_noise_generator(129));
 
         let chunk_thread_pool = ThreadPoolBuilder::new()
             .num_threads(16)
@@ -161,10 +161,13 @@ impl ChunkManager {
         });
 
         for (neighbor, distance) in neighbors {
-            if !(self.chunks.contains_key(&neighbor)
-                || self.load_queue.contains(&neighbor)
-                || self.currently_generating.contains(&neighbor))
-            {
+            let chunk_loaded = {
+                self.load_queue.contains(&neighbor)
+                    || self.currently_generating.contains(&neighbor)
+                    || self.chunks.contains_key(&neighbor)
+            };
+
+            if !chunk_loaded {
                 self.load_queue.push_back(neighbor);
             }
 
@@ -188,7 +191,7 @@ impl ChunkManager {
     fn load_chunks(&mut self) {
         for chunk in self.chunk_rx.try_iter() {
             self.currently_generating.remove(&chunk.position);
-            self.chunks.insert(chunk.position, chunk);
+            self.chunks.insert(chunk.position, Arc::new(chunk));
         }
 
         for position in self
@@ -196,12 +199,13 @@ impl ChunkManager {
             .drain(..MAX_CHUNK_DATA_GENERATION_PER_FRAME.min(self.load_queue.len()))
         {
             let tx = self.chunk_tx.clone();
+            let noise = self.noise.clone();
 
             self.currently_generating.insert(position);
 
-            self.chunk_thread_pool.scope(|_| {
+            self.chunk_thread_pool.spawn(move || {
                 let mut chunk = Chunk::new(position);
-                chunk.fill_perlin(&*self.noise);
+                chunk.fill_perlin(&*noise);
 
                 tx.send(chunk).unwrap();
             });
@@ -228,17 +232,25 @@ impl ChunkManager {
             .drain(..MAX_CHUNK_MESH_GENERATION_PER_FRAME.min(self.build_queue.len()))
         {
             let tx = self.mesh_tx.clone();
-            let chunks = &self.chunks;
 
             if !self.chunks.contains_key(&position) {
                 reinsert.push(position);
                 continue;
             }
 
+            let chunk = self.chunks[&position].clone();
+            let neighbor_positions = chunk.neighbors();
+
+            let mut chunks = neighbor_positions
+                .filter_map(|p| self.chunks.get(&p).map(|c| (p, c.clone())))
+                .collect::<HashMap<_, _>>();
+
+            chunks.insert(position, chunk);
+
             self.currently_meshing.insert(position);
 
-            self.mesh_thread_pool.scope(move |_| {
-                let mesh = ChunkMesher::new(&chunks, position).build();
+            self.mesh_thread_pool.spawn(move || {
+                let mesh = ChunkMesher::new(chunks, position).build();
                 tx.send((position, mesh)).unwrap();
             });
         }
